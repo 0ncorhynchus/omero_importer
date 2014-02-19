@@ -1,9 +1,9 @@
-
 import sys
 try:
 	from omero.gateway import BlitzGateway
 	from omero.sys import ParametersI
 	from omero import model
+	from omero.rtypes import rstring
 except:
 	sys.stderr.write('You should run "source setup.sh" to added omero module to PYTHONPATH')
 	sys.exit(1)
@@ -18,22 +18,23 @@ def connect_to_omero(uname, passwd):
 		return None
 	return conn
 
-def get_dataset(conn, dname):
+def get_dataset(conn, name):
 	params = ParametersI()
 	params.exp(conn.getUser().getId())
 	datasets = conn.getObjects('Dataset', params=params)
-	datasetId = -1
 	retval = None
 	for dataset in datasets:
-		if dataset.getName() == dname:
+		if dataset.getName() == name:
 			retval = dataset
 			break
 	return retval
-	if retval is None:
-		retval = model.DatasetI()
-		retval.setName(rstring(dname))
-		retval = conn.getUpdateService().saveAndReturnObject(retval)
-	return datasetId
+
+def create_dataset(conn, name):
+	dataset = model.DatasetI()
+	dataset.setName(rstring(name))
+	dataset = conn.getUpdateService().saveAndReturnObject(dataset)
+	datasetId = dataset.getId().getValue()
+	return conn.getObject("Dataset", datasetId)
 
 def get_datasets(conn):
 	params = ParametersI()

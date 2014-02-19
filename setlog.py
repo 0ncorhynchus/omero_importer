@@ -2,6 +2,7 @@
 # developed by S.Kato
 # USAGE: python setlog.py <LOG FILE> <IMAGE FILE> [OPTION TITLE]
 
+import os
 import sys
 import re
 import struct
@@ -72,6 +73,13 @@ def read_log_file(logfile_name):
 	return data
 
 def write_log(logfile_name,imagefile_name,option_title=''):
+	if not os.path.exists(logfile_name):
+		print 'LOG FILE : %s does not exist.'%logfile_name
+		return False
+	if not os.path.exists(imagefile_name):
+		print 'IMAGE FILE : %s does not exist.'%imagefile_name
+		return False
+
 	print 'LOG FILE: %s'%logfile_name
 	print 'IMAGE FILE: %s'%imagefile_name
 
@@ -110,6 +118,8 @@ def write_log(logfile_name,imagefile_name,option_title=''):
 	imagefile.write(translate_80s('SECTIONZ %s' % log['sectionz']))
 	imagefile.write(translate_80s(option_title))
 	imagefile.close()
+
+	return True
 
 if __name__ == '__main__':
 	if len(sys.argv) != 3 and len(sys.argv) != 4:
