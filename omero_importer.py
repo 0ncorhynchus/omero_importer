@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# -*- coding: utf-8 -*-
 import sys
 import os
 import shutil
@@ -57,7 +58,7 @@ class ChromaticShift:
 			p = subprocess.Popen(args, stdout=subprocess.PIPE, shell=False)
 			self._commands = p.stdout.readlines()
 		except OSError:
-			sys.stderr.write('Error')
+			print >> sys.stderr, 'Error'
 
 	@property
 	def path(self):
@@ -75,7 +76,7 @@ class ChromaticShift:
 				prc = subprocess.Popen(cmd, shell=True)
 				prc.wait()
 		except OSError:
-			sys.stderr.write('Error: can\'t execute commands')
+			print >> sys.stderr, 'Error: can\'t execute commands'
 
 	def move(self, dest):
 		dest_dir = os.path.dirname(dest)
@@ -84,7 +85,7 @@ class ChromaticShift:
 		try:
 			shutil.move(self.path, dest)
 		except shutil.Error:
-			sys.stderr.write('Can\'t move %s to %s' % (self.path, dest))
+			print >> sys.stderr, 'Can\'t move %s to %s' % (self.path, dest)
 		return os.path.exists(dest)
 
 def getLog(path):
@@ -104,14 +105,14 @@ def getLog(path):
 def getOwner(path):
 	uid = os.stat(path).st_uid
 	for uname in users:
-		if uid in users[uname]['uids']:
-			return uname
-
-	for uname in users:
 		for keyword in users[uname]['keywords']:
 			if keyword in path:
 				return uname
-	
+
+	for uname in users:
+		if uid in users[uname]['uids']:
+			return uname
+
 	return None
 
 def import_file(path):
@@ -120,7 +121,7 @@ def import_file(path):
 
 	uname = getOwner(path)
 	if uname not in users:
-		sys.stderr.write('the owner of %s is not found.\n' % path)
+		print >> sys.stderr, 'the owner of %s is not found.\n' % path
 		return
 	passwd = users[uname]['passwd']
 
@@ -129,6 +130,11 @@ def import_file(path):
 
 	print '#' * 50
 	print '[import_file] %s' % path
+	if ' ' in path:
+		print '%s includes the space \' \'.' % path
+		conn._closeSession()
+		return
+
 	zs = ChromaticShift(path)
 	existence = False
 	if dataset is None:
@@ -150,16 +156,17 @@ def import_file(path):
 			# chromatic shift
 			zs.do()
 			if not os.path.exists(zs.path):
-				sys.stderr.write('%s does not exist.' % zs.path)
+				print >> sys.stderr, '%s does not exist.' % zs.path
 				conn._closeSession()
 				return
 			if not zs.move(dest):
-				sys.stderr.write('Can\'t move %s to %s' % (self.path, dest))
+				print >> sys.stderr, 'Can\'t move %s to %s' % (self.path, dest)
 				conn._closeSession()
+				return
 
 			# set log
 			if not setlog.write_log(log, dest, image_uuid):
-				sys.stderr.write('Can\'t write logs into %s' % dest)
+				print >> sys.stderr, 'Can\'t write logs into %s' % dest
 				conn._closeSession()
 
 			# import
@@ -195,7 +202,14 @@ def import_to_omero(path, pattern=None, ignores=None):
 			import_to_omero(child, pattern, ignores)
 
 def main():
-	paths = ['/data1', '/data2']
+	argv = sys.argv
+	argc = len(argv)
+
+	if argc == 1:
+		paths = ['/data1', '/data2']
+	else:
+		paths = argv
+
 	ignores = ['/data5/data3_backup_20130819', '/data5/suguru/omero-imports']
 	pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
 	for path in paths:
