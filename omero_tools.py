@@ -10,6 +10,7 @@ except:
 
 HOST = 'localhost'
 PORT = 4064
+
 def connect_to_omero(uname, passwd):
 	conn = BlitzGateway(uname, passwd, host=HOST, port=PORT)
 	connected = conn.connect()
@@ -19,9 +20,7 @@ def connect_to_omero(uname, passwd):
 	return conn
 
 def get_dataset(conn, name):
-	params = ParametersI()
-	params.exp(conn.getUser().getId())
-	datasets = conn.getObjects('Dataset', params=params)
+	datasets = get_datasets(conn)
 	retval = None
 	for dataset in datasets:
 		if dataset.getName() == name:

@@ -8,39 +8,9 @@ import uuid
 import subprocess
 import omero_tools
 import setlog
-
-users = {
-		'asato': {
-			'passwd': 'omx',
-			'uids': (10104,),
-			'keywords': ('aya',)
-			},
-		'gkafer': {
-			'passwd': 'omx',
-			'uids': (511,),
-			'keywords': ('Georgia', 'gkafer')
-			},
-		'klu': {
-			'passwd': 'omx',
-			'uids': (508,),
-			'keywords': ('klu', 'kai')
-			},
-		'rrillo': {
-			'passwd': 'omx',
-			'uids': (509,),
-			'keywords': ('regina',)
-			},
-		'suguru': {
-			'passwd': 'omx',
-			'uids': (1002,),
-			'keywords': ('suguru',)
-			},
-		'xli': {
-			'passwd': 'omx',
-			'uids': (510,),
-			'keywords': ('xuan',)
-			}
-		}
+from chromaticshift import ChromaticShift
+from data import users
+from imagefile import ImageFile
 
 def search_files(path, pattern=None):
 	retval = []
@@ -49,44 +19,6 @@ def search_files(path, pattern=None):
 			if pattern is None or pattern.match(file):
 				retval.append(os.path.join(path,file))
 	return retval
-
-class ChromaticShift:
-	def __init__(self, path):
-		self._filename = os.path.basename(path) + '.zs'
-		args = ['/opt/bin/chromatic-shift', path]
-		try:
-			p = subprocess.Popen(args, stdout=subprocess.PIPE, shell=False)
-			self._commands = p.stdout.readlines()
-		except OSError:
-			print >> sys.stderr, 'Error'
-
-	@property
-	def path(self):
-		return os.getcwd() + '/' + self._filename;
-
-	@property
-	def filename(self):
-		return self._filename;
-
-	def do(self):
-		try:
-			for cmd in self._commands:
-				if cmd.find('#') == 0:
-					continue
-				prc = subprocess.Popen(cmd, shell=True)
-				prc.wait()
-		except OSError:
-			print >> sys.stderr, 'Error: can\'t execute commands'
-
-	def move(self, dest):
-		dest_dir = os.path.dirname(dest)
-		if not os.path.exists(dest_dir):
-			os.makedirs(dest_dir)
-		try:
-			shutil.move(self.path, dest)
-		except shutil.Error:
-			print >> sys.stderr, 'Can\'t move %s to %s' % (self.path, dest)
-		return os.path.exists(dest)
 
 def getLog(path):
 	dirname = os.path.dirname(path)
@@ -145,6 +77,7 @@ def import_file(path):
 				print '%s exists.' % zs.filename
 				existence = True
 				break
+
 	if not existence:
 		log = getLog(path)
 		if log is not None:
@@ -179,6 +112,7 @@ def import_file(path):
 			import_prc = subprocess.Popen(import_args,
 					shell=False)
 			import_prc.wait()
+
 	conn._closeSession()
 
 def import_to_omero(path, pattern=None, ignores=None):
