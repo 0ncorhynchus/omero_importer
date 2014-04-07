@@ -2,7 +2,7 @@ import sys
 try:
     from omero.gateway import BlitzGateway
     from omero.sys import ParametersI
-    from omero import model
+    from omero import model, callbacks, cmd
     from omero.rtypes import rstring
 except:
     sys.stderr.write('You should run "source setup.sh" to added omero module to PYTHONPATH')
@@ -47,3 +47,14 @@ def get_images(conn):
     images = conn.getObjects('Image', params=params)
     return images
 
+def delete_objects(conn, type_name, ids, deleteAnns, deleteChildren):
+    handle = conn.deleteObjects(type_name, ids, \
+            deleteAnns=deleteAnns, deleteChildren=deleteChildren)
+    cb = callbacks.CmdCallbackI(conn.c, handle)
+    print 'Deleting, please wait.'
+    while not cb.block(500):
+        print '.'
+    err = isinstance(cb.getResponse(), cmd.ERR)
+    if err:
+        print >> sys.stderr, cb.getResponse()
+    cb.close(True)

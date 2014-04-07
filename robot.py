@@ -1,5 +1,6 @@
 #! -*- coding: utf-8 -*-
 
+import sys
 import json
 import re
 import omero_tools
@@ -17,10 +18,12 @@ def search_duplicated_images():
         images = omero_tools.get_images(conn)
         for image in images:
             name = image.getName()
+            img_id = image.getId()
             obj = {
                     'user' : user,
                     'dataset' : image.getDataset().getName(),
-                    'name' : name
+                    'name' : name,
+                    'id' : img_id
                     }
             print '|- %s in %s' % (name, image.getDataset().getName())
             if re.match(r'^.*\.zs\.zs$', name) is not None:
@@ -49,8 +52,35 @@ def search_duplicated_images():
     print >> zszs_out, json.dumps(zszs, sort_keys=True, indent=4)
     zszs_out.close()
 
+def clean_cstwice():
+    print '[search_images_chromatic_shifted_twice]'
+    for user in users:
+        print '+ %s' % user
+        zszs = []
+        conn = omero_tools.connect_to_omero(
+                user, users[user]['passwd'])
+        images = omero_tools.get_images(conn)
+        for image in images:
+            name = image.getName()
+            img_id = image.getId()
+            if re.match(r'^.*\.zs\.zs$', name) is not None:
+                zszs.append(img_id)
+                continue
+
+        omero_tools.delete_objects(conn, 'Image', zszs,
+                True, True)
+        conn._closeSession()
+
 def main():
-    search_duplicated_images()
+    argv = sys.argv
+    argc = len(argv)
+    if argc == 2:
+        if argv[1] == 'check':
+            search_duplicated_images()
+    elif  argc == 3:
+        if argv[1] == 'clean':
+            if argv[2] == 'cstwice':
+                clean_cstwice()
 
 if __name__ == '__main__':
     main()

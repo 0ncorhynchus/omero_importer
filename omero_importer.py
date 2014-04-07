@@ -174,7 +174,7 @@ def main():
     argc = len(argv)
 
     if argc == 1:
-        paths = ['/data2', '/data4', '/data5']
+        paths = ['/data2', '/data3', '/data5']
     else:
         paths = argv
 
