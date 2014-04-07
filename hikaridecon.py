@@ -26,13 +26,22 @@ class HikariDecon:
             self._returncode = 1
 
     @property
+    def product_path(self):
+        return self._path + '_decon'
+
+    @property
     def returncode(self):
         return self._returncode
 
 def run(path):
-    p = subprocess.Popen(['hikaridecon', path],
+    pwd = os.getcwd()
+    dirname = os.path.dirname(path)
+    basename = os.path.basename(path)
+    os.chdir(dirname)
+    p = subprocess.Popen(['hikaridecon', basename],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
     p.wait()
+    os.chdir(pwd)
     if p.returncode != 0:
         print >> sys.stderr
         return None

@@ -9,11 +9,15 @@ import hikaridecon
 class TestHikariDecon(unittest.TestCase) :
 
     def setUp(self):
-        self.path = '/data5/suguru/test/sample_R3D.dv'
+        self.path = '/data2/suguru/test/sample_R3D.dv'
 
     def test_run(self):
         proc = hikaridecon.run(self.path)
         self.assertIsNotNone(proc)
+
+    def test_product_path(self):
+        proc = hikaridecon.run(self.path)
+        self.assertEqual(proc.product_path, self.path+'_decon')
 
     def test_wait(self):
         proc = hikaridecon.run(self.path)

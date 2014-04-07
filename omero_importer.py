@@ -13,6 +13,7 @@ import setlog
 from chromaticshift import ChromaticShift
 from data import users
 from imagefile import ImageFile
+import hikaridecon
 
 def search_files(path, pattern=None):
     retval = []
@@ -53,6 +54,11 @@ def get_owner(path):
             return uname
 
     return None
+
+def deconvolute(path):
+    p = hikaridecon.run(path)
+    p.wait()
+    return p.returncode == 0
 
 def import_file(path):
     if os.path.isdir(path):
@@ -151,6 +157,7 @@ def import_file(path):
 
 def import_to_omero(path, pattern=None, ignores=None):
     hidden_pattern = re.compile('^\..*')
+    not_shifted_pattern = re.compile('(.*)R3D.dv$')
     try:
         children = os.listdir(path)
     except:
@@ -164,10 +171,15 @@ def import_to_omero(path, pattern=None, ignores=None):
             continue
         if not os.access(child, os.R_OK):
             continue
-        if pattern is None or pattern.match(child):
-            import_file(child)
         if os.path.isdir(child):
             import_to_omero(child, pattern, ignores)
+        elif not_shifted_pattern.match(child):
+            p = hikaridecon.run(child)
+            p.wait()
+            if p.returncode == 0:
+                import_file(p.product_path)
+        elif pattern is None or pattern.match(child):
+            import_file(child)
 
 def main():
     argv = sys.argv
@@ -181,7 +193,7 @@ def main():
     ignores = ['/data5/data3_backup_20130819', '/data5/suguru/omero-imports']
     pattern = re.compile('(.*)_decon$')
     # only import files deconvoluted with hikaridecon
-    #pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
+    # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     for path in paths:
         import_to_omero(path, pattern, ignores)
 
