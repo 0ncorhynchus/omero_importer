@@ -8,12 +8,7 @@ import re
 import uuid
 import subprocess
 
-import omero_tools
-import setlog
-from chromaticshift import ChromaticShift, ChromaticShiftError
-from data import users
-from imagefile import ImageFile
-import hikaridecon
+from omero_import import *
 
 def search_files(path, pattern=None):
     retval = []
@@ -77,8 +72,8 @@ def import_file(path):
         return False
     passwd = users[uname]['passwd']
 
-    conn = omero_tools.connect_to_omero(uname, passwd)
-    dataset = omero_tools.get_dataset(conn, dirname)
+    conn = tools.connect_to_omero(uname, passwd)
+    dataset = tools.get_dataset(conn, dirname)
 
     print '#' * 50
     print '[import_file] %s' % path
@@ -96,7 +91,7 @@ def import_file(path):
 
     existence = False
     if dataset is None:
-        dataset = omero_tools.create_dataset(conn, dirname)
+        dataset = tools.create_dataset(conn, dirname)
     else:
         for image in dataset.listChildren():
             if image.getName() == zs.filename:
@@ -134,7 +129,7 @@ def import_file(path):
         return False
 
     # set log
-    if not setlog.write_log(log, dest, image_uuid):
+    if not write_log(log, dest, image_uuid):
         print >> sys.stderr, 'Can\'t write logs into %s' % dest
         conn._closeSession()
         return False
@@ -187,7 +182,7 @@ def main():
 
     if argc == 1:
         #paths = ['/data2', '/data3', '/data5'] TODO
-        paths = ['/data2']
+        paths = ['/data5']
     else:
         argv.pop(0)
         paths = argv

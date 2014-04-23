@@ -16,9 +16,14 @@ class HikariDecon:
     def wait(self):
         while True:
             time.sleep(0.1)
-            p = subprocess.Popen(['hkrun', 'qstat', '-j %i'%self._jobcode],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-            p.wait()
+            try:
+                p = subprocess.Popen(['hkrun', 'qstat', '-j %i'%self._jobcode],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+                p.wait()
+            except OSError, e:
+                print >> sys.stderr, e
+                self._returncode = 2
+                return
             if p.returncode != 0:
                 break
         if os.path.exists(self._path + '_decon'):
@@ -41,7 +46,7 @@ def run(path):
     os.chdir(dirname)
     try:
         p = subprocess.Popen(['hikaridecon', basename],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+                stdout=subprocess.PIPE, shell=False)
         p.wait()
     except OSError, e:
         print >> sys.stderr, e
@@ -49,7 +54,6 @@ def run(path):
 
     os.chdir(pwd)
     if p.returncode != 0:
-        print >> sys.stderr, p.stderr
         return None
 
     outputs = p.stdout.readlines()

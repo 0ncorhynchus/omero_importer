@@ -3,7 +3,7 @@ import unittest
 import sys
 import os
 sys.path.append(os.pardir)
-from imagefile import ImageFile
+from omero_import import ImageFile
 
 class TestImageFile(unittest.TestCase):
 

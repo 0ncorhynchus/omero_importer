@@ -3,7 +3,7 @@ import unittest
 import sys
 import os
 sys.path.append(os.pardir)
-from chromaticshift import ChromaticShift, ChromaticShiftError
+from omero_import import ChromaticShift, ChromaticShiftError
 
 class TestChromaticShift(unittest.TestCase):
 

@@ -4,13 +4,13 @@ import unittest
 import sys
 import os
 sys.path.append(os.pardir)
-import hikaridecon
+import omero_import
 
 class TestHikariDecon(unittest.TestCase) :
 
     def setUp(self):
         self.path = '/data2/suguru/test/sample_R3D.dv'
-        self.proc = hikaridecon.run(self.path)
+        self.proc = omero_import.hikaridecon.run(self.path)
 
     def test_run(self):
         self.assertIsNotNone(self.proc)
