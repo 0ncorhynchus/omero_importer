@@ -10,7 +10,7 @@ import subprocess
 
 import omero_tools
 import setlog
-from chromaticshift import ChromaticShift
+from chromaticshift import ChromaticShift, ChromaticShiftError
 from data import users
 from imagefile import ImageFile
 import hikaridecon
@@ -57,6 +57,8 @@ def get_owner(path):
 
 def deconvolute(path):
     p = hikaridecon.run(path)
+    if p is None:
+        return False
     p.wait()
     return p.returncode == 0
 
@@ -173,21 +175,21 @@ def import_to_omero(path, pattern=None, ignores=None):
             continue
         if os.path.isdir(child):
             import_to_omero(child, pattern, ignores)
-        elif not_shifted_pattern.match(child):
-            p = hikaridecon.run(child)
-            p.wait()
-            if p.returncode == 0:
-                import_file(p.product_path)
         elif pattern is None or pattern.match(child):
             import_file(child)
+        elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
+            if deconvolute(child):
+                import_file(p.product_path)
 
 def main():
     argv = sys.argv
     argc = len(argv)
 
     if argc == 1:
-        paths = ['/data2', '/data3', '/data5']
+        #paths = ['/data2', '/data3', '/data5'] TODO
+        paths = ['/data2']
     else:
+        argv.pop(0)
         paths = argv
 
     ignores = ['/data5/data3_backup_20130819', '/data5/suguru/omero-imports']

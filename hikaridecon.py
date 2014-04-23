@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import subprocess
 import re
 import time
@@ -38,12 +39,17 @@ def run(path):
     dirname = os.path.dirname(path)
     basename = os.path.basename(path)
     os.chdir(dirname)
-    p = subprocess.Popen(['hikaridecon', basename],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-    p.wait()
+    try:
+        p = subprocess.Popen(['hikaridecon', basename],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        p.wait()
+    except OSError, e:
+        print >> sys.stderr, e
+        return None
+
     os.chdir(pwd)
     if p.returncode != 0:
-        print >> sys.stderr
+        print >> sys.stderr, p.stderr
         return None
 
     outputs = p.stdout.readlines()

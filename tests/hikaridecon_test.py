@@ -10,20 +10,19 @@ class TestHikariDecon(unittest.TestCase) :
 
     def setUp(self):
         self.path = '/data2/suguru/test/sample_R3D.dv'
+        self.proc = hikaridecon.run(self.path)
 
     def test_run(self):
-        proc = hikaridecon.run(self.path)
-        self.assertIsNotNone(proc)
+        self.assertIsNotNone(self.proc)
 
     def test_product_path(self):
-        proc = hikaridecon.run(self.path)
-        self.assertEqual(proc.product_path, self.path+'_decon')
+        self.assertIsNotNone(self.proc)
+        self.assertEqual(self.proc.product_path, self.path+'_decon')
 
     def test_wait(self):
-        proc = hikaridecon.run(self.path)
-        self.assertIsNotNone(proc)
-        proc.wait()
-        self.assertEqual(proc.returncode, 0)
+        self.assertIsNotNone(self.proc)
+        self.proc.wait()
+        self.assertEqual(self.proc.returncode, 0)
 
 if __name__ == '__main__':
     unittest.main()
