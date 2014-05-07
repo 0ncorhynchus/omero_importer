@@ -53,9 +53,9 @@ def get_owner(path):
 def deconvolute(path):
     p = hikaridecon.run(path)
     if p is None:
-        return False
+        return (None, False)
     p.wait()
-    return p.returncode == 0
+    return (p, p.returncode == 0)
 
 def import_file(path):
     if os.path.isdir(path):
@@ -173,16 +173,16 @@ def import_to_omero(path, pattern=None, ignores=None):
         elif pattern is None or pattern.match(child):
             import_file(child)
         elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
-            if deconvolute(child):
-                import_file(p.product_path)
+            decon = deconvolute(child)
+            if decon[1]:
+                import_file(decon[0].product_path)
 
 def main():
     argv = sys.argv
     argc = len(argv)
 
     if argc == 1:
-        #paths = ['/data2', '/data3', '/data5'] TODO
-        paths = ['/data5']
+        paths = ['/data2', '/data3', '/data5']
     else:
         argv.pop(0)
         paths = argv
