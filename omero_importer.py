@@ -8,6 +8,7 @@ import re
 import uuid
 import subprocess
 
+from settings import *
 from omero_import import *
 
 def search_files(path, pattern=None):
@@ -39,13 +40,13 @@ def get_log(path):
 
 def get_owner(path):
     uid = os.stat(path).st_uid
-    for uname in users:
-        for keyword in users[uname]['keywords']:
+    for uname in USERS:
+        for keyword in USERS[uname]['KEYWORDS']:
             if keyword in path:
                 return uname
 
-    for uname in users:
-        if uid in users[uname]['uids']:
+    for uname in USERS:
+        if uid in USERS[uname]['UIDS']:
             return uname
 
     return None
@@ -67,10 +68,10 @@ def import_file(path):
     filename = os.path.basename(path)
 
     uname = get_owner(path)
-    if uname not in users:
+    if uname not in USERS:
         print >> sys.stderr, 'the owner of %s is not found.\n' % path
         return False
-    passwd = users[uname]['passwd']
+    passwd = USERS[uname]['PASSWORD']
 
     conn = tools.connect_to_omero(uname, passwd)
     dataset = tools.get_dataset(conn, dirname)
@@ -182,12 +183,12 @@ def main():
     argc = len(argv)
 
     if argc == 1:
-        paths = ['/data2', '/data3', '/data5']
+        paths = DEFAULT['DIRECTORIES']
     else:
         argv.pop(0)
         paths = argv
 
-    ignores = ['/data5/data3_backup_20130819', '/data5/suguru/omero-imports']
+    ignores = DEFAULT['IGNORES']
     pattern = re.compile('(.*)_decon$')
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
