@@ -17,7 +17,6 @@ class ChromaticShift:
                 raise ChromaticShiftError('\n'.join(p.stderr.readlines()))
             self._commands = p.stdout.readlines()
         except (OSError, ValueError, ChromaticShiftError), err:
-            #print >> sys.stderr, err
             raise
 
     @property
@@ -38,7 +37,6 @@ class ChromaticShift:
                 if prc.returncode != 0:
                     raise ChromaticShiftError('\n'.join(prc.stderr.readlines()))
         except (OSError, ChromaticShiftError), err:
-            #print >> sys.stderr, err
             raise
 
     def move(self, dest):
@@ -48,7 +46,6 @@ class ChromaticShift:
         try:
             shutil.move(self.path, dest)
         except shutil.Error, err:
-            #print >> sys.stderr, err
             raise
         return os.path.exists(dest)
 

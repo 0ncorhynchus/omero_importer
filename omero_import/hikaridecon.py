@@ -21,9 +21,8 @@ class HikariDecon:
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
                 p.wait()
             except OSError, e:
-                print >> sys.stderr, e
                 self._returncode = 2
-                return
+                raise
             if p.returncode != 0:
                 break
         if os.path.exists(self._path + '_decon'):
@@ -49,8 +48,7 @@ def run(path):
                 stdout=subprocess.PIPE, shell=False)
         p.wait()
     except OSError, e:
-        print >> sys.stderr, e
-        return None
+        raise
 
     os.chdir(pwd)
     if p.returncode != 0:

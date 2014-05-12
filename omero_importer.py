@@ -7,9 +7,11 @@ import shutil
 import re
 import uuid
 import subprocess
+import json
 
 from settings import *
 from omero_import import *
+import Ice
 
 def search_files(path, pattern=None):
     retval = []
@@ -52,43 +54,66 @@ def get_owner(path):
     return None
 
 def deconvolute(path):
-    p = hikaridecon.run(path)
+    try:
+        p = hikaridecon.run(path)
+    except OSError:
+        raise
+
     if p is None:
         return (None, False)
     p.wait()
     return (p, p.returncode == 0)
 
 def import_file(path):
+    retval = {}
+    retval['PROCESSES'] = []
     if os.path.isdir(path):
-        return False
+        return ({}, False)
     if not os.path.exists(path):
-        return False
+        return ({}, False)
 
     dirname = os.path.dirname(path)
     filename = os.path.basename(path)
 
+    if ' ' in path:
+        print >> sys.stderr, '%s includes the space \' \'.' % path
+        return ({}, False)
+
     uname = get_owner(path)
     if uname not in USERS:
         print >> sys.stderr, 'the owner of %s is not found.\n' % path
-        return False
+        return ({}, False)
     passwd = USERS[uname]['PASSWORD']
 
-    conn = tools.connect_to_omero(uname, passwd)
+    try:
+        conn = tools.connect_to_omero(uname, passwd)
+    except Ice.Exception, err:
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(err).mro()[0],
+                'PROCESS': 'CHROMATIC SHIFT INIT',
+                'ICE_NAME': err.ice_name,
+                'MESSAGE': err.message,
+                }
+        return (retval, True)
     dataset = tools.get_dataset(conn, dirname)
 
-    print '#' * 50
-    print '[import_file] %s' % path
-    if ' ' in path:
-        print '%s includes the space \' \'.' % path
-        conn._closeSession()
-        return False
-
+    retval['PROCESSES'].append('CHROMATIC SHIFT INIT')
     try:
         zs = ChromaticShift(path)
     except (OSError, ValueError, ChromaticShiftError), err:
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(err).mro()[0],
+                'PROCESS': 'CHROMATIC SHIFT INIT',
+                'ERRNO': err.errno,
+                'MESSAGE': err.message,
+                'FILENAME': err.filename,
+                'STRERROR': err.strerror
+                }
         print >> sys.stderr, err
         conn._closeSession()
-        return False
+        return (retval, True)
 
     existence = False
     if dataset is None:
@@ -96,46 +121,66 @@ def import_file(path):
     else:
         for image in dataset.listChildren():
             if image.getName() == zs.filename:
-                print '%s exists.' % zs.filename
                 existence = True
                 break
 
     if existence:
         conn._closeSession()
-        return False
+        return ({}, False) # already exsited
 
+    retval['PROCESSES'].append('LOG GETTING')
     try:
         log = get_log(path)
     except (ValueError, IOError), err:
-        print >> sys.stderr, err
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(err).mro()[0],
+                'PROCESS': 'LOG GETTING',
+                'ERRNO': err.errno,
+                'MESSAGE': err.message,
+                'FILENAME': err.filename,
+                'STRERROR': err.strerror
+                }
         conn._closeSession()
-        return False
+        return (retval, True)
 
-    print '[log] %s' % log
+    #print '[log] %s' % log
     dest = '/omeroimports' + dirname + '/' + zs.filename
-    print '[dest] %s' % dest
+    #print '[dest] %s' % dest
     image_uuid = str(uuid.uuid4())
-    print '[uuid] %s' % image_uuid
+    #print '[uuid] %s' % image_uuid
+
     # chromatic shift
     try:
         zs.do()
         zs.move(dest)
-    except (OSError, ChromaticShiftError), err:
-        print >> sys.stderr, err
+    except (OSError, ChromaticShiftError, shutil.Error), err:
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(err).mro()[0],
+                'PROCESS': 'CHROMATIC SHIFT',
+                'ERRNO': err.errno,
+                'MESSAGE': err.message,
+                'FILENAME': err.filename,
+                'STRERROR': err.strerror
+                }
         conn._closeSession()
-        return False
-    except shutil.Error, err:
-        print >> sys.stderr, err
-        conn._closeSession()
-        return False
+        return (retval, True)
 
     # set log
+    retval['PROCESSES'].append('LOG WRITING')
     if not write_log(log, dest, image_uuid):
-        print >> sys.stderr, 'Can\'t write logs into %s' % dest
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': 'LogWrittingError',
+                'PROCESS': 'LOG WRITING',
+                'STRERROR': 'Can\'t write logs into %s' % dest
+                }
         conn._closeSession()
-        return False
+        return (retval, True)
 
     # import
+    retval['PROCESSES'].append('IMPORTING')
     import_args = ['/opt/omero445/importer-cli',
             '-s', 'localhost',
             '-u', uname,
@@ -146,14 +191,21 @@ def import_file(path):
             stderr=subprocess.PIPE, shell=False)
     import_prc.wait()
     if import_prc.returncode != 0:
-        print >> sys.stderr, '\n'.join(import_prc.stderr.readlines())
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': 'ImportingError',
+                'PROCESS': 'IMPORTING',
+                'STRERROR': '\n'.join(import_prc.stderr.readlines())
+                }
         conn._closeSession()
-        return False
+        return (retval, True)
 
     conn._closeSession()
-    return True
+    retval['SUCCESS'] = True
+    return (retval, True)
 
 def import_to_omero(path, pattern=None, ignores=None):
+    result = {}
     hidden_pattern = re.compile('^\..*')
     not_shifted_pattern = re.compile('(.*)R3D.dv$')
     try:
@@ -169,14 +221,38 @@ def import_to_omero(path, pattern=None, ignores=None):
             continue
         if not os.access(child, os.R_OK):
             continue
+
         if os.path.isdir(child):
-            import_to_omero(child, pattern, ignores)
+            result.update(import_to_omero(child, pattern, ignores))
         elif pattern is None or pattern.match(child):
-            import_file(child)
+            obj, is_completed = import_file(child)
+            if not is_completed:
+                continue
+            result[child] = obj
         elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
-            decon = deconvolute(child)
-            if decon[1]:
-                import_file(decon[0].product_path)
+            try:
+                decon = deconvolute(child)
+                if decon[1]:
+                    obj, is_completed = import_file(decon[0].product_path)
+                    if not is_completed:
+                        continue
+                    if "PROCESSES" in obj:
+                        obj["PROCESSES"].append()
+                    else:
+                        obj["PROCESSES"] = ["DECONVOLUTION"]
+            except OSError, e:
+                obj = {}
+                obj["SUCCESS"] = False
+                obj["PROCESSES"] = ["DECONVOLUTION"]
+                obj["ERROR"] = {
+                    "TYPE": type(e).mro()[0],
+                    "ERRNO": e.errno,
+                    "MESSAGE": e.message,
+                    "FILENAME": e.filename,
+                    "STRERROR": e.strerror
+                    }
+                result[child] = obj
+    return result
 
 def main():
     argv = sys.argv
@@ -193,7 +269,8 @@ def main():
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     for path in paths:
-        import_to_omero(path, pattern, ignores)
+        result = import_to_omero(path, pattern, ignores)
+        json.dumps(result)
 
 if __name__ == "__main__":
     main()

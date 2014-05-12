@@ -53,7 +53,7 @@ def delete_objects(conn, type_name, ids, deleteAnns, deleteChildren):
     cb = callbacks.CmdCallbackI(conn.c, handle)
     print 'Deleting, please wait.'
     while not cb.block(500):
-        print '.'
+        print '.',
     err = isinstance(cb.getResponse(), cmd.ERR)
     if err:
         print >> sys.stderr, cb.getResponse()
