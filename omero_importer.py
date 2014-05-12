@@ -85,15 +85,16 @@ def import_file(path):
         return ({}, False)
     passwd = USERS[uname]['PASSWORD']
 
+    retval['PROCESSES'].append('CONNECTING')
     try:
         conn = tools.connect_to_omero(uname, passwd)
     except Ice.Exception, err:
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': type(err).mro()[0],
-                'PROCESS': 'CHROMATIC SHIFT INIT',
+                'PROCESS': 'CONNECTING',
                 'ICE_NAME': err.ice_name,
-                'MESSAGE': err.message,
+                'MESSAGE': err.message
                 }
         return (retval, True)
     dataset = tools.get_dataset(conn, dirname)
@@ -151,6 +152,7 @@ def import_file(path):
     #print '[uuid] %s' % image_uuid
 
     # chromatic shift
+    retval['PROCESSES'].append('CHROMATIC SHIFT')
     try:
         zs.do()
         zs.move(dest)
@@ -236,20 +238,17 @@ def import_to_omero(path, pattern=None, ignores=None):
                     obj, is_completed = import_file(decon[0].product_path)
                     if not is_completed:
                         continue
-                    if "PROCESSES" in obj:
-                        obj["PROCESSES"].append()
-                    else:
-                        obj["PROCESSES"] = ["DECONVOLUTION"]
+                    obj['PROCESSES'].append('DECONVOLUTION')
             except OSError, e:
                 obj = {}
-                obj["SUCCESS"] = False
-                obj["PROCESSES"] = ["DECONVOLUTION"]
-                obj["ERROR"] = {
-                    "TYPE": type(e).mro()[0],
-                    "ERRNO": e.errno,
-                    "MESSAGE": e.message,
-                    "FILENAME": e.filename,
-                    "STRERROR": e.strerror
+                obj['SUCCESS'] = False
+                obj['PROCESSES'] = ['DECONVOLUTION']
+                obj['ERROR'] = {
+                    'TYPE': type(e).mro()[0],
+                    'ERRNO': e.errno,
+                    'MESSAGE': e.message,
+                    'FILENAME': e.filename,
+                    'STRERROR': e.strerror
                     }
                 result[child] = obj
     return result
@@ -268,9 +267,10 @@ def main():
     pattern = re.compile('(.*)_decon$')
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
+    result = {}
     for path in paths:
-        result = import_to_omero(path, pattern, ignores)
-        json.dumps(result)
+        result.update(import_to_omero(path, pattern, ignores))
+    print json.dumps(result)
 
 if __name__ == "__main__":
     main()
