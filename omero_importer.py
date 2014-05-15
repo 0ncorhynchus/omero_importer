@@ -89,6 +89,7 @@ def import_file(path):
     try:
         conn = tools.connect_to_omero(uname, passwd)
     except Ice.Exception, err:
+        print >> sys.stderr, err
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': type(err).mro()[0],
@@ -103,6 +104,7 @@ def import_file(path):
     try:
         zs = ChromaticShift(path)
     except (OSError, ValueError, ChromaticShiftError), err:
+        print >> sys.stderr, err
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': type(err).mro()[0],
@@ -133,6 +135,7 @@ def import_file(path):
     try:
         log = get_log(path)
     except (ValueError, IOError), err:
+        print >> sys.stderr, err
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': type(err).mro()[0],
@@ -157,6 +160,7 @@ def import_file(path):
         zs.do()
         zs.move(dest)
     except (OSError, ChromaticShiftError, shutil.Error), err:
+        print >> sys.stderr, err
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': type(err).mro()[0],
@@ -172,6 +176,7 @@ def import_file(path):
     # set log
     retval['PROCESSES'].append('LOG WRITING')
     if not write_log(log, dest, image_uuid):
+        print >> sys.stderr, err
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': 'LogWrittingError',
@@ -193,11 +198,13 @@ def import_file(path):
             stderr=subprocess.PIPE, shell=False)
     import_prc.wait()
     if import_prc.returncode != 0:
+        err_message = '\n'.join(import_prc.stderr.readlines())
+        print >> sys.stderr, err_message
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': 'ImportingError',
                 'PROCESS': 'IMPORTING',
-                'STRERROR': '\n'.join(import_prc.stderr.readlines())
+                'STRERROR': err_message
                 }
         conn._closeSession()
         return (retval, True)
@@ -239,16 +246,17 @@ def import_to_omero(path, pattern=None, ignores=None):
                     if not is_completed:
                         continue
                     obj['PROCESSES'].append('DECONVOLUTION')
-            except OSError, e:
+            except OSError, err:
+                print >> sys.stderr, err
                 obj = {}
                 obj['SUCCESS'] = False
                 obj['PROCESSES'] = ['DECONVOLUTION']
                 obj['ERROR'] = {
-                    'TYPE': type(e).mro()[0],
-                    'ERRNO': e.errno,
-                    'MESSAGE': e.message,
-                    'FILENAME': e.filename,
-                    'STRERROR': e.strerror
+                    'TYPE': type(err).mro()[0],
+                    'ERRNO': err.errno,
+                    'MESSAGE': err.message,
+                    'FILENAME': err.filename,
+                    'STRERROR': err.strerror
                     }
                 result[child] = obj
     return result
