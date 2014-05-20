@@ -98,6 +98,15 @@ def import_file(path):
                 'MESSAGE': err.message
                 }
         return (retval, True)
+    except Exception, err:
+        print >> sys.stderr, err
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(er).mro()[0],
+                'PROCESS': 'CONNECTING',
+                'MESSAGE': err.message
+                }
+        return (retval, True)
     dataset = tools.get_dataset(conn, dirname)
 
     retval['PROCESSES'].append('CHROMATIC SHIFT INIT')
@@ -116,6 +125,15 @@ def import_file(path):
                 }
         print >> sys.stderr, err
         conn._closeSession()
+        return (retval, True)
+    except Exception, err:
+        print >> sys.stderr, err
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(er).mro()[0],
+                'PROCESS': 'CHROMATIC SHIFT INIT',
+                'MESSAGE': err.message
+                }
         return (retval, True)
 
     existence = False
@@ -147,6 +165,15 @@ def import_file(path):
                 }
         conn._closeSession()
         return (retval, True)
+    except Exception, err:
+        print >> sys.stderr, err
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(er).mro()[0],
+                'PROCESS': 'LOG GETTING',
+                'MESSAGE': err.message
+                }
+        return (retval, True)
 
     #print '[log] %s' % log
     dest = '/omeroimports' + dirname + '/' + zs.filename
@@ -171,6 +198,15 @@ def import_file(path):
                 'STRERROR': err.strerror
                 }
         conn._closeSession()
+        return (retval, True)
+    except Exception, err:
+        print >> sys.stderr, err
+        retval['SUCCESS'] = False
+        retval['ERROR'] = {
+                'TYPE': type(er).mro()[0],
+                'PROCESS': 'LOG GETTING',
+                'MESSAGE': err.message
+                }
         return (retval, True)
 
     # set log
@@ -214,14 +250,14 @@ def import_file(path):
     return (retval, True)
 
 def import_to_omero(path, pattern=None, ignores=None):
-    result = {}
     hidden_pattern = re.compile('^\..*')
     not_shifted_pattern = re.compile('(.*)R3D.dv$')
     try:
         children = os.listdir(path)
     except:
-        return
+        return {}
 
+    result = {}
     for child in children:
         if hidden_pattern.match(child):
             continue
@@ -259,6 +295,15 @@ def import_to_omero(path, pattern=None, ignores=None):
                     'STRERROR': err.strerror
                     }
                 result[child] = obj
+            except Exception, err:
+                print >> sys.stderr, err
+                retval['SUCCESS'] = False
+                retval['ERROR'] = {
+                        'TYPE': type(er).mro()[0],
+                        'PROCESS': 'DECONVOLUTION',
+                        'MESSAGE': err.message
+                        }
+                return (retval, True)
     return result
 
 def main():
