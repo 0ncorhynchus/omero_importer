@@ -1,1 +1,22 @@
+#! /bin/bash
+
+# checking whether OMERO is running
+omero login -s localhost -u suguru -w omx > /dev/null 2> /dev/null
+if [ "$?" -ne 0 ]; then
+    su -c "omero admin start" pcarlton
+    omero login -s localhost -u suguru -w omx > /dev/null 2> /dev/null
+    if [ $? -ne 0 ]; then
+        echo '[ERROR] OMERO can be started.'
+        exit 1
+    fi
+fi
+omero logout
+
+# checking whether /data2 is mounted
+mounts=`grep /data2 /proc/mounts`
+if [ -z "$mounts" ]; then
+    echo '[ERROR] /data2 is not mounted.'
+    exit 2
+fi
+
 python omero_importer.py
