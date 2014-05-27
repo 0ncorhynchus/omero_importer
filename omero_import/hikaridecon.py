@@ -1,6 +1,5 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import subprocess
@@ -41,6 +40,12 @@ class HikariDecon:
 def run(path):
     pwd = os.getcwd()
     dirname = os.path.dirname(path)
+    filesize = os.path.getsize(path)
+
+    if filesize >= 2 * 1024 * 1024 * 1024:
+        size_gigabyte = filesize / 1024 / 1024 / 1024
+        raise DeconvoluteError(1, 'File size %d Gb is over 2Gb' % size_gigabyte, path)
+
     basename = os.path.basename(path)
     os.chdir(dirname)
     try:
@@ -68,3 +73,5 @@ def run(path):
     retval = HikariDecon(jobcode, path)
     return retval
 
+class DeconvoluteError(EnvironmentError):
+    pass

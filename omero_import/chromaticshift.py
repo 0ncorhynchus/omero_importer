@@ -14,7 +14,7 @@ class ChromaticShift:
                     stderr=subprocess.PIPE, shell=False)
             p.wait()
             if p.returncode != 0:
-                raise ChromaticShiftError('\n'.join(p.stderr.readlines()))
+                raise ChromaticShiftError(1, '\n'.join(p.stderr.readlines()), path)
             self._commands = p.stdout.readlines()
         except (OSError, ValueError, ChromaticShiftError), err:
             raise
@@ -35,7 +35,7 @@ class ChromaticShift:
                 prc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True)
                 prc.wait()
                 if prc.returncode != 0:
-                    raise ChromaticShiftError('\n'.join(prc.stderr.readlines()))
+                    raise ChromaticShiftError(2, '\n'.join(prc.stderr.readlines()), self._filename)
         except (OSError, ChromaticShiftError), err:
             raise
 

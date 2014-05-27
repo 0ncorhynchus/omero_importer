@@ -56,7 +56,7 @@ def get_owner(path):
 def deconvolute(path):
     try:
         p = hikaridecon.run(path)
-    except OSError:
+    except OSError, hikaridecon.DeconvoluteError:
         raise
 
     if p is None:
@@ -64,77 +64,60 @@ def deconvolute(path):
     p.wait()
     return (p, p.returncode == 0)
 
+def update_error(obj, error, process):
+    retval = {}.update(obj)
+    retval['SUCCESS'] = False
+    retval['ERROR'] = {}
+    retval['ERROR']['TYPE'] = type(err).mro0()[0]
+    retval['ERROR']['PROCESS'] = process
+    retval['ERROR']['MESSAGE'] = err.message
+    retval['ERROR']['STR'] = err.__str__()
+    if hasattr(error, 'ice_name'):
+        retval['ERROR']['ICE_NAME'] = error.ice_name
+    return retval
+
+processes = [('CONNECTING'), ('CHROMATIC SHIFT INIT'), ('LOG GETTING'),
+    ('CHROMATIC SHIFT'), ('LOG WRITING'), ('IMPORTING')]
+
 def import_file(path):
     retval = {}
     retval['PROCESSES'] = []
-    if os.path.isdir(path):
-        return ({}, False)
-    if not os.path.exists(path):
+
+    if os.path.isdir(path) or not os.path.exists(path):
         return ({}, False)
 
     dirname = os.path.dirname(path)
     filename = os.path.basename(path)
 
     if ' ' in path:
-        print >> sys.stderr, '%s includes the space \' \'.' % path
         return ({}, False)
 
     uname = get_owner(path)
     if uname not in USERS:
-        print >> sys.stderr, 'the owner of %s is not found.\n' % path
         return ({}, False)
+
     passwd = USERS[uname]['PASSWORD']
 
+    # CONNECTIONG
     retval['PROCESSES'].append('CONNECTING')
     try:
         conn = tools.connect_to_omero(uname, passwd)
-    except Ice.Exception, err:
+    except (Ice.Exception, Exception), err:
         print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(err).mro()[0],
-                'PROCESS': 'CONNECTING',
-                'ICE_NAME': err.ice_name,
-                'MESSAGE': err.message
-                }
-        return (retval, True)
-    except Exception, err:
-        print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(er).mro()[0],
-                'PROCESS': 'CONNECTING',
-                'MESSAGE': err.message
-                }
-        return (retval, True)
+        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
+        return (retval_with_error, True)
+
     dataset = tools.get_dataset(conn, dirname)
 
+    # CHROMATIC SHIFT INIT
     retval['PROCESSES'].append('CHROMATIC SHIFT INIT')
     try:
         zs = ChromaticShift(path)
-    except (OSError, ValueError, ChromaticShiftError), err:
+    except (OSError, ValueError, ChromaticShiftError, Exception), err:
         print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(err).mro()[0],
-                'PROCESS': 'CHROMATIC SHIFT INIT',
-                'ERRNO': err.errno,
-                'MESSAGE': err.message,
-                'FILENAME': err.filename,
-                'STRERROR': err.strerror
-                }
-        print >> sys.stderr, err
+        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
-        return (retval, True)
-    except Exception, err:
-        print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(er).mro()[0],
-                'PROCESS': 'CHROMATIC SHIFT INIT',
-                'MESSAGE': err.message
-                }
-        return (retval, True)
+        return (retval_with_error, True)
 
     existence = False
     if dataset is None:
@@ -149,80 +132,37 @@ def import_file(path):
         conn._closeSession()
         return ({}, False) # already exsited
 
+    # LOG GETTING
     retval['PROCESSES'].append('LOG GETTING')
     try:
         log = get_log(path)
-    except (ValueError, IOError), err:
+    except (ValueError, IOError, Exception), err:
         print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(err).mro()[0],
-                'PROCESS': 'LOG GETTING',
-                'ERRNO': err.errno,
-                'MESSAGE': err.message,
-                'FILENAME': err.filename,
-                'STRERROR': err.strerror
-                }
+        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
         return (retval, True)
-    except Exception, err:
-        print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(er).mro()[0],
-                'PROCESS': 'LOG GETTING',
-                'MESSAGE': err.message
-                }
-        return (retval, True)
 
-    #print '[log] %s' % log
     dest = '/omeroimports' + dirname + '/' + zs.filename
-    #print '[dest] %s' % dest
     image_uuid = str(uuid.uuid4())
-    #print '[uuid] %s' % image_uuid
 
-    # chromatic shift
+    # CHROMATIC SHIFT
     retval['PROCESSES'].append('CHROMATIC SHIFT')
     try:
         zs.do()
         zs.move(dest)
-    except (OSError, ChromaticShiftError, shutil.Error), err:
+    except (OSError, ChromaticShiftError, shutil.Error, Exception), err:
         print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(err).mro()[0],
-                'PROCESS': 'CHROMATIC SHIFT',
-                'ERRNO': err.errno,
-                'MESSAGE': err.message,
-                'FILENAME': err.filename,
-                'STRERROR': err.strerror
-                }
-        conn._closeSession()
-        return (retval, True)
-    except Exception, err:
-        print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': type(er).mro()[0],
-                'PROCESS': 'LOG GETTING',
-                'MESSAGE': err.message
-                }
+        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         return (retval, True)
 
-    # set log
+    # LOG WRITING
     retval['PROCESSES'].append('LOG WRITING')
     if not write_log(log, dest, image_uuid):
-        print >> sys.stderr, err
-        retval['SUCCESS'] = False
-        retval['ERROR'] = {
-                'TYPE': 'LogWrittingError',
-                'PROCESS': 'LOG WRITING',
-                'STRERROR': 'Can\'t write logs into %s' % dest
-                }
+        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
         return (retval, True)
 
-    # import
+    # IMPORTING
     retval['PROCESSES'].append('IMPORTING')
     import_args = ['/opt/omero445/importer-cli',
             '-s', 'localhost',
@@ -231,11 +171,10 @@ def import_file(path):
             '-d', str(dataset.getId()),
             '-n', zs.filename, dest]
     import_prc = subprocess.Popen(import_args,
-            stderr=subprocess.PIPE, shell=False)
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
     import_prc.wait()
     if import_prc.returncode != 0:
         err_message = '\n'.join(import_prc.stderr.readlines())
-        print >> sys.stderr, err_message
         retval['SUCCESS'] = False
         retval['ERROR'] = {
                 'TYPE': 'ImportingError',
@@ -275,35 +214,18 @@ def import_to_omero(path, pattern=None, ignores=None):
                 continue
             result[child] = obj
         elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
+            obj = {}
+            obj['PROCESSES'].append('DECONVOLUTION')
             try:
                 decon = deconvolute(child)
-                if decon[1]:
-                    obj, is_completed = import_file(decon[0].product_path)
-                    if not is_completed:
-                        continue
-                    obj['PROCESSES'].append('DECONVOLUTION')
-            except OSError, err:
+            except (OSError, Exception, hikaridecon.DeconvoluteError), err:
                 print >> sys.stderr, err
-                obj = {}
-                obj['SUCCESS'] = False
-                obj['PROCESSES'] = ['DECONVOLUTION']
-                obj['ERROR'] = {
-                    'TYPE': type(err).mro()[0],
-                    'ERRNO': err.errno,
-                    'MESSAGE': err.message,
-                    'FILENAME': err.filename,
-                    'STRERROR': err.strerror
-                    }
-                result[child] = obj
-            except Exception, err:
-                print >> sys.stderr, err
-                retval['SUCCESS'] = False
-                retval['ERROR'] = {
-                        'TYPE': type(er).mro()[0],
-                        'PROCESS': 'DECONVOLUTION',
-                        'MESSAGE': err.message
-                        }
-                return (retval, True)
+                result[child] = update_error(err, {}, obj['PROCESSES'][-1])
+                continue
+            if decon[1]:
+                obj, is_completed = import_file(decon[0].product_path)
+                if not is_completed:
+                    continue
     return result
 
 def main():

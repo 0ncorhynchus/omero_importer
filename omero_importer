@@ -19,4 +19,4 @@ if [ -z "$mounts" ]; then
     exit 2
 fi
 
-python omero_importer.py
+python omero_importer.py $@
