@@ -74,14 +74,14 @@ def read_log_file(logfile_name):
 
 def write_log(logfile_name,imagefile_name,option_title=''):
     if not os.path.exists(logfile_name):
-        print 'LOG FILE : %s does not exist.'%logfile_name
+        #print 'LOG FILE : %s does not exist.'%logfile_name
         return False
     if not os.path.exists(imagefile_name):
-        print 'IMAGE FILE : %s does not exist.'%imagefile_name
+        #print 'IMAGE FILE : %s does not exist.'%imagefile_name
         return False
 
-    print 'LOG FILE: %s'%logfile_name
-    print 'IMAGE FILE: %s'%imagefile_name
+    #print 'LOG FILE: %s'%logfile_name
+    #print 'IMAGE FILE: %s'%imagefile_name
 
     log = read_log_file(logfile_name)
 
