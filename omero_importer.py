@@ -215,7 +215,7 @@ def import_to_omero(path, pattern=None, ignores=None):
             result[child] = obj
         elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
             obj = {}
-            obj['PROCESSES'].append('DECONVOLUTION')
+            obj['PROCESSES'] = ['DECONVOLUTION']
             try:
                 decon = deconvolute(child)
             except (OSError, Exception, hikaridecon.DeconvoluteError), err:
