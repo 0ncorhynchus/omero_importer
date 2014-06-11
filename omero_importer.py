@@ -65,13 +65,14 @@ def deconvolute(path):
     return (p, p.returncode == 0)
 
 def update_error(obj, error, process):
-    retval = {}.update(obj)
+    retval = {}
+    retval.update(obj)
     retval['SUCCESS'] = False
     retval['ERROR'] = {}
-    retval['ERROR']['TYPE'] = type(err).mro0()[0]
+    retval['ERROR']['TYPE'] = str(type(error).mro()[0])
     retval['ERROR']['PROCESS'] = process
-    retval['ERROR']['MESSAGE'] = err.message
-    retval['ERROR']['STR'] = err.__str__()
+    retval['ERROR']['MESSAGE'] = error.message
+    retval['ERROR']['STR'] = error.__str__()
     if hasattr(error, 'ice_name'):
         retval['ERROR']['ICE_NAME'] = error.ice_name
     return retval
@@ -140,7 +141,7 @@ def import_file(path):
         print >> sys.stderr, err
         retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
-        return (retval, True)
+        return (retval_with_error, True)
 
     dest = '/omeroimports' + dirname + '/' + zs.filename
     image_uuid = str(uuid.uuid4())
@@ -153,14 +154,14 @@ def import_file(path):
     except (OSError, ChromaticShiftError, shutil.Error, Exception), err:
         print >> sys.stderr, err
         retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
-        return (retval, True)
+        return (retval_with_error, True)
 
     # LOG WRITING
     retval['PROCESSES'].append('LOG WRITING')
     if not write_log(log, dest, image_uuid):
         retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
-        return (retval, True)
+        return (retval_with_error, True)
 
     # IMPORTING
     retval['PROCESSES'].append('IMPORTING')
@@ -243,8 +244,13 @@ def main():
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     result = {}
-    for path in paths:
-        result.update(import_to_omero(path, pattern, ignores))
+
+    try:
+        for path in paths:
+            result.update(import_to_omero(path, pattern, ignores))
+    except Exception, err:
+        print >> sys.stderr, err
+
     print json.dumps(result)
 
 if __name__ == "__main__":
