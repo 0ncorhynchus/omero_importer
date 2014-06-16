@@ -227,6 +227,7 @@ def import_to_omero(path, pattern=None, ignores=None):
                 obj, is_completed = import_file(decon[0].product_path)
                 if not is_completed:
                     continue
+                result[child] = obj
     return result
 
 def main():
