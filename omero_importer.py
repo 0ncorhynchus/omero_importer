@@ -218,13 +218,13 @@ def import_to_omero(path, pattern=None, ignores=None):
             obj = {}
             obj['PROCESSES'] = ['DECONVOLUTION']
             try:
-                decon = deconvolute(child)
+                decon, is_succeeded = deconvolute(child)
             except (OSError, Exception, hikaridecon.DeconvoluteError), err:
                 print >> sys.stderr, err
-                result[child] = update_error(err, {}, obj['PROCESSES'][-1])
+                result[child] = update_error({}, err, obj['PROCESSES'][-1])
                 continue
-            if decon[1]:
-                obj, is_completed = import_file(decon[0].product_path)
+            if is_succeeded:
+                obj, is_completed = import_file(decon.product_path)
                 if not is_completed:
                     continue
                 result[child] = obj
