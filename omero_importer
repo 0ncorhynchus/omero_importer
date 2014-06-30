@@ -6,7 +6,7 @@ if [ "$?" -ne 0 ]; then
     su -c "omero admin start" pcarlton
     omero login -s localhost -u suguru -w omx > /dev/null 2> /dev/null
     if [ $? -ne 0 ]; then
-        echo '[ERROR] OMERO can be started.'
+        echo '[ERROR] OMERO.server is not running.'
         exit 1
     fi
 fi
@@ -19,4 +19,15 @@ if [ -z "$mounts" ]; then
     exit 2
 fi
 
+running_file='/tmp/omero_importer_is_running'
+
+if [ -e $running_file ];then
+    echo '[ERROR] OMERO importer is already running!'
+    exit 3
+fi
+
+touch $running_file
+
 python omero_importer.py $@
+
+rm $running_file

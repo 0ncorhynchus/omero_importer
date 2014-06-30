@@ -3,18 +3,18 @@
 import sys
 import json
 import re
-import omero_tools
-from imagefile import ImageFile
-from data import users
+from omero_import import omero_tools
+from omero_import.imagefile import ImageFile
+from settings import USERS
 
 def search_duplicated_images():
     print '[search_duplicated_images]'
     tmp = {}
     zszs = []
-    for user in users:
+    for user in USERS:
         print '+ %s' % user
         conn = omero_tools.connect_to_omero(
-                user, users[user]['passwd'])
+                user, USERS[user]['PASSWORD'])
         images = omero_tools.get_images(conn)
         for image in images:
             name = image.getName()
@@ -54,11 +54,11 @@ def search_duplicated_images():
 
 def clean_cstwice():
     print '[search_images_chromatic_shifted_twice]'
-    for user in users:
+    for user in USERS:
         print '+ %s' % user
         zszs = []
         conn = omero_tools.connect_to_omero(
-                user, users[user]['passwd'])
+                user, USERS[user]['PASSWORD'])
         images = omero_tools.get_images(conn)
         for image in images:
             name = image.getName()

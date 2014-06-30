@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+from functions import *
+
+def is_shifted(path):
+    return isNotNone(re.match(r'^.*\.zs$', path))
+
+def is_deconvoluted(path):
+    return isNotNone(re.match(r'^.*\.dv_decon.*$|^.*_D4D\.dv.*$', path))
 
 class ImageFile:
 

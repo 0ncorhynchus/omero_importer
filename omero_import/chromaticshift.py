@@ -30,7 +30,7 @@ class ChromaticShift:
     def do(self):
         try:
             for cmd in self._commands:
-                if cmd.find('#') == 0:
+                if cmd.lstrip().find('#') == 0:
                     continue
                 prc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True)
                 prc.wait()

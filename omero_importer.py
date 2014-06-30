@@ -15,30 +15,11 @@ import Ice
 
 def search_files(path, pattern=None):
     retval = []
-    for path, dirs, files in os.walk(path):
+    for dpath, dirs, files in os.walk(path):
         for file in files:
             if pattern is None or pattern.match(file):
-                retval.append(os.path.join(path,file))
+                retval.append(os.path.join(dpath,file))
     return retval
-
-def get_log(path):
-    dirname = os.path.dirname(path)
-    try:
-        name, exp = os.path.basename(path).rsplit('.',1)
-    except ValueError:
-        raise
-
-    logfile = ''
-    if exp == 'dv_decon':
-        logfile = dirname + '/' + name + '.dv.log'
-    elif exp == 'dv':
-        name = name.replace('_D3D','')
-        logfile = dirname + '/' + name + '.dv.log'
-
-    if not os.path.exists(logfile):
-        raise IOError(errno.ENOENT, '', logfile)
-
-    return logfile
 
 def get_owner(path):
     uid = os.stat(path).st_uid
@@ -54,10 +35,13 @@ def get_owner(path):
     return None
 
 def deconvolute(path):
-    try:
-        p = hikaridecon.run(path)
-    except OSError, hikaridecon.DeconvoluteError:
-        raise
+    '''
+    argument: a file path
+    return: a tuple (a Popen instance, success flag)
+    can raise OSError, hikaridecon.DeconvoluteError
+    '''
+
+    p = hikaridecon.run(path)
 
     if p is None:
         return (None, False)
@@ -77,93 +61,116 @@ def update_error(obj, error, process):
         retval['ERROR']['ICE_NAME'] = error.ice_name
     return retval
 
+def getPassword(uname):
+    return USERS[uname]['PASSWORD']
+
 processes = [('CONNECTING'), ('CHROMATIC SHIFT INIT'), ('LOG GETTING'),
     ('CHROMATIC SHIFT'), ('LOG WRITING'), ('IMPORTING')]
 
+def connect(obj):
+    uname = obj['uname']
+    passwd = obj['passwd']
+    dirname = obj['dirname']
+    obj['conn'] = tools.connect_to_omero(uname, passwd)
+    obj['dataset'] = tools.get_dataset(obj['conn'], dirname)
+
+def init_chromatic_shift(obj):
+    path = obj['path']
+    obj['zs'] = ChromaticShift(path)
+
+def get_log(obj):
+    '''
+    argument: a file path
+    return: the log file path
+    can raise ValueError, IOError
+    '''
+
+    path = obj['path']
+    dirname = os.path.dirname(path)
+    name, exp = os.path.basename(path).rsplit('.',1)
+
+    logfile = ''
+    if exp == 'dv_decon':
+        logfile = dirname + '/' + name + '.dv.log'
+    elif exp == 'dv':
+        name = name.replace('_D3D','')
+        logfile = ''.join([dirname, '/', name, '.dv.log'])
+
+    if not os.path.exists(logfile):
+        raise fail(IOError, errno.ENOENT, '', logfile)
+
+    obj['logfile'] = logfile
+    obj['dest'] = ''.join('/omeroimports', obj['dirname'], '/', obj['zs'].filename)
+    obj['image_uuid'] = str(uuid.uuid4())
+
+def run_chromatic_shift(obj):
+    obj['zs'].do()
+    obj['zs'].move(obj['dest'])
+
+def unit_process(obj, prcname, func):
+    obj['retval']['PROCESS'].append(prcname)
+    try:
+        new_obj = func(obj)
+    except Exception, err:
+        print >> sys.stderr, err
+        retval = obj['retval']
+        obj['retval'] = update_error(retval, er, retval['PROCESSES'][-1])
+    return new_obj
+
 def import_file(path):
-    retval = {}
-    retval['PROCESSES'] = []
+    ns = {'retval':{'PROCESSES': []}}
+    ns['path'] = path
 
     if os.path.isdir(path) or not os.path.exists(path):
         return ({}, False)
 
-    dirname = os.path.dirname(path)
-    filename = os.path.basename(path)
-
     if ' ' in path:
         return ({}, False)
 
-    uname = get_owner(path)
+    ns['dirname'] = os.path.dirname(path)
+    ns['filename'] = os.path.basename(path)
+
+    ns['uname'] = get_owner(path)
     if uname not in USERS:
         return ({}, False)
 
-    passwd = USERS[uname]['PASSWORD']
+    ns['passwd'] = getPassword(uname)
 
-    # CONNECTIONG
-    retval['PROCESSES'].append('CONNECTING')
-    try:
-        conn = tools.connect_to_omero(uname, passwd)
-    except (Ice.Exception, Exception), err:
-        print >> sys.stderr, err
-        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
-        return (retval_with_error, True)
+    if not unit_process(ns, 'CONNECTING', connect):
+        return (ns['retval'], True)
 
-    dataset = tools.get_dataset(conn, dirname)
+    if not unit_process(ns, 'CHROMATIC SHIFT INIT', init_chromatic_shift)
+        return (ns['retval'], True)
 
-    # CHROMATIC SHIFT INIT
-    retval['PROCESSES'].append('CHROMATIC SHIFT INIT')
-    try:
-        zs = ChromaticShift(path)
-    except (OSError, ValueError, ChromaticShiftError, Exception), err:
-        print >> sys.stderr, err
-        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
-        conn._closeSession()
-        return (retval_with_error, True)
-
+    ###################### TODO
     existence = False
-    if dataset is None:
-        dataset = tools.create_dataset(conn, dirname)
+    if ns['dataset'] is None:
+        ns['dataset'] = tools.create_dataset(conn, dirname)
     else:
-        for image in dataset.listChildren():
-            if image.getName() == zs.filename:
+        for image in ns['dataset'].listChildren():
+            if image.getName() == ns['zs'].filename:
                 existence = True
                 break
-
     if existence:
         conn._closeSession()
         return ({}, False) # already exsited
+    ######################
 
-    # LOG GETTING
-    retval['PROCESSES'].append('LOG GETTING')
-    try:
-        log = get_log(path)
-    except (ValueError, IOError, Exception), err:
-        print >> sys.stderr, err
-        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
-        conn._closeSession()
-        return (retval_with_error, True)
+    if not unit_process(ns, 'LOG GETTING', get_log)
 
-    dest = '/omeroimports' + dirname + '/' + zs.filename
-    image_uuid = str(uuid.uuid4())
-
-    # CHROMATIC SHIFT
-    retval['PROCESSES'].append('CHROMATIC SHIFT')
-    try:
-        zs.do()
-        zs.move(dest)
-    except (OSError, ChromaticShiftError, shutil.Error, Exception), err:
-        print >> sys.stderr, err
-        retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
-        return (retval_with_error, True)
+    if not unit_process(ns, 'CHROMATIC SHIFT', run_chromatic_shift)
 
     # LOG WRITING
-    retval['PROCESSES'].append('LOG WRITING')
-    if not write_log(log, dest, image_uuid):
+    ###################### TODO
+    ns['retval']['PROCESSES'].append('LOG WRITING')
+    if not write_log(logfile, dest, image_uuid):
         retval_with_error = update_error(retval, err, retval['PROCESSES'][-1])
         conn._closeSession()
         return (retval_with_error, True)
+    ######################
 
     # IMPORTING
+    ###################### TODO
     retval['PROCESSES'].append('IMPORTING')
     import_args = ['/opt/omero445/importer-cli',
             '-s', 'localhost',
@@ -184,10 +191,11 @@ def import_file(path):
                 }
         conn._closeSession()
         return (retval, True)
+    ######################
 
-    conn._closeSession()
-    retval['SUCCESS'] = True
-    return (retval, True)
+    ns['conn']._closeSession()
+    ns['retval']['SUCCESS'] = True
+    return (ns['retval'], True)
 
 def import_to_omero(path, pattern=None, ignores=None):
     hidden_pattern = re.compile('^\..*')
@@ -213,7 +221,8 @@ def import_to_omero(path, pattern=None, ignores=None):
             obj, is_completed = import_file(child)
             if not is_completed:
                 continue
-            result[child] = obj
+            #result[child] = obj
+            print '"%s": %s' % (path, json.dumps(obj))
         elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
             obj = {}
             obj['PROCESSES'] = ['DECONVOLUTION']
@@ -227,7 +236,8 @@ def import_to_omero(path, pattern=None, ignores=None):
                 obj, is_completed = import_file(decon.product_path)
                 if not is_completed:
                     continue
-                result[child] = obj
+                #result[child] = obj
+                print '"%s": %s' % (path, json.dumps(obj))
     return result
 
 def main():
@@ -245,6 +255,7 @@ def main():
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     result = {}
+    print '{'
 
     try:
         for path in paths:
@@ -252,7 +263,8 @@ def main():
     except Exception, err:
         print >> sys.stderr, err
 
-    print json.dumps(result)
+    print '}'
+    #print json.dumps(result)
 
 if __name__ == "__main__":
     main()

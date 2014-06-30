@@ -1,4 +1,4 @@
-# -*- encodin: utf-8 -*-
+# -*- coding: utf-8 -*-
 # written by S.Kato
 # USAGE: python setlog.py <LOG FILE> <IMAGE FILE> [OPTION TITLE]
 
@@ -9,6 +9,16 @@ import struct
 
     #header_format = '<iiiiiiiiiiffffffiiifffiihhi24shhhhffffffhhhhhhffhhfffhhhhhhfffi'
     #title_format = '80s80s80s80s80s80s80s80s80s80s'
+
+log_formats = [
+        {'title': 'image_file', 'regular': r'(\s*)Resolve3D Image File:(\s*)'},
+        {'title': 'created', 'regular': r'(\s*)Created(\s*)'},
+        {'title': 'objective', 'regular': r'(\s*)Objective:(\s*)'},
+        {'title': 'type', 'regular': r'(\s*)Type:(\s*)'},
+        {'title': 'gain', 'regular': r'(\s*)Gain:(\s*)'},
+        {'title': 'speed', 'regular': r'(\s*)Speed:(\s*)'},
+        {'title': 'sectionz', 'regular': r'(\s*)SECTIONZ(\s*)'},
+        {'title': 'coordinates', 'regular': r'(\s*)Stage coordinates:(\s)'}]
 
 regulars = [
         r'(\s*)Resolve3D Image File:(\s*)',
@@ -33,10 +43,11 @@ filters = [
         r'(\s*)CCD(\s*)']
 
 def translate_space(string):
-    string = string.lstrip()
-    string = string.rstrip('\n')
-    string = string.rstrip()
-    return string
+    return string.lstrip().rstrip('\n').rstrip()
+#    string = string.lstrip()
+#    string = string.rstrip('\n')
+#    string = string.rstrip()
+#    return string
 
 def translate_80s(string):
     length = len(string)
