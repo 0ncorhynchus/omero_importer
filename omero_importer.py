@@ -8,7 +8,6 @@ import re
 import uuid
 import subprocess
 import json
-from copy import deepcopy
 
 from settings import *
 from omero_import import *
@@ -17,9 +16,9 @@ import Ice
 def search_files(path, pattern=None):
     retval = []
     for dpath, dirs, files in os.walk(path):
-        for file in files:
-            if pattern is None or pattern.match(file):
-                retval.append(os.path.join(dpath,file))
+        if pattern is not None:
+            files = filter(lambda f: pattern.match(f), files)
+        retval = concat(retval, map(lambda f: os.path.join(dpath, f), files))
     return retval
 
 def get_owner(path):
@@ -41,64 +40,60 @@ def deconvolute(path):
     return: a tuple (a Popen instance, success flag)
     can raise OSError, hikaridecon.DeconvoluteError
     '''
-
     p = hikaridecon.run(path)
-
     if p is None:
         return (None, False)
     p.wait()
     return (p, p.returncode == 0)
 
-def update_error(obj, error, prcname):
-    retval = deepcopy(obj)
-    retval['SUCCESS'] = False
-    retval['ERROR'] = {}
-    retval['ERROR']['TYPE'] = str(type(error).mro()[0])
-    retval['ERROR']['PROCESS'] = prcname
-    retval['ERROR']['MESSAGE'] = error.message
-    retval['ERROR']['STR'] = error.__str__()
+def get_error_dict(error):
+    retval = {}
+    retval['TYPE'] = str(type(error).mro()[0])
+    retval['MESSAGE'] = error.message
+    retval['STR'] = error.__str__()
     if hasattr(error, 'ice_name'):
-        retval['ERROR']['ICE_NAME'] = error.ice_name
+        retval['ICE_NAME'] = error.ice_name
     return retval
+
+def update_error(obj, error, prcname):
+    obj['SUCCESS'] = False
+    obj['ERROR'] = get_error_dict(error)
+    obj['ERROR']['PROCESS'] = prcname
 
 getPassword = lambda uname: USERS[uname]['PASSWORD']
 
-def connect(obj):
-    new_obj = deepcopy(obj)
-    new_obj['conn'] = tools.connect_to_omero(obj['uname'], obj['passwd'])
-    new_obj['dataset'] = tools.get_dataset(obj['conn'], obj['dirname'])
-    return new_obj
+def connect(**kwargs):
+    kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
+    kwargs['dataset'] = tools.get_dataset(kwargs['conn'], kwargs['dirname'])
+    return kwargs
 
-def init_chromatic_shift(obj):
-    new_obj = deepcopy(obj)
-    new_obj['zs'] = ChromaticShift(obj['path'])
-    return new_obj
+def init_chromatic_shift(**kwargs):
+    kwargs['zs'] = ChromaticShift(kwargs['path'])
+    return kwargs
 
-def check_not_imported_yet(obj):
+def check_not_imported_yet(**kwargs):
     imported = False
-    if obj['dataset'] is None:
-        obj['dataset'] = tools.create_dataset(conn, dirname)
+    if kwargs['dataset'] is None:
+        kwargs['dataset'] = tools.create_dataset(kwargs['conn'], kwargs['dirname'])
     else:
-        for image in obj['dataset'].listChildren():
-            if image.getName() == obj['zs'].filename:
+        for image in kwargs['dataset'].listChildren():
+            if image.getName() == kwargs['zs'].filename:
                 imported = True
                 break
     if imported:
-        fail(EnvironmentError, '%s is already imported.' % obj['path'])
-    return obj
+        fail(EnvironmentError, '%s is already imported.' % kwargs['path'])
+    return kwargs
 
-def get_log(obj):
+def get_log(**kwargs):
     '''
     argument: a file path
     return: the log file path
     can raise ValueError, IOError
     '''
 
-    path = obj['path']
+    path = kwargs['path']
     dirname = os.path.dirname(path)
     name, exp = os.path.basename(path).rsplit('.',1)
-
-    new_obj = deepcopy(obj)
 
     logfile = ''
     if exp == 'dv_decon':
@@ -110,28 +105,28 @@ def get_log(obj):
     if not os.path.exists(logfile):
         fail(IOError, errno.ENOENT, '', logfile)
 
-    new_obj['logfile'] = logfile
-    new_obj['dest'] = ''.join('/omeroimports', obj['dirname'], '/', obj['zs'].filename)
-    new_obj['image_uuid'] = str(uuid.uuid4())
+    kwargs['logfile'] = logfile
+    kwargs['dest'] = ''.join(['/omeroimports', kwargs['dirname'], '/', kwargs['zs'].filename])
+    kwargs['image_uuid'] = str(uuid.uuid4())
 
-    return new_obj
+    return kwargs
 
-def run_chromatic_shift(obj):
-    new_obj = deepcopy(obj)
-    new_obj['zs'].do()
-    new_obj['zs'].move(obj['dest'])
-    return new_obj
+def run_chromatic_shift(**kwargs):
+    kwargs['zs'].do()
+    kwargs['zs'].move(kwargs['dest'])
+    return kwargs
 
-def add_log(obj):
-    obj['retval']['PROCESSES'].append('LOG WRITING')
-    if not write_log(obj['logfile'], obj['dest'], obj['image_uuid']):
-        fail(EnvironmentError, '%s can not be written to %s.' % (obj['logfile'], obj['dest']))
+def add_log(**kwargs):
+    kwargs['retval']['PROCESSES'].append('LOG WRITING')
+    if not write_log(kwargs['logfile'], kwargs['dest'], kwargs['image_uuid']):
+        fail(EnvironmentError, '%s can not be written to %s.' % (kwargs['logfile'], kwargs['dest']))
+    return kwargs
 
-def import_main(obj):
+def import_main(**kwargs):
     args = ['/opt/omero445/importer-cli',
             '-s', 'localhost',
-            '-u', obj['uname'],
-            '-w', obj['passwd'],
+            '-u', kwargs['uname'],
+            '-w', kwargs['passwd'],
             '-d', str(dataset.getId()),
             '-n', zs.filename, dest]
     import_prc = subprocess.Popen(args, stdout=subprocess.PIPE,
@@ -140,20 +135,34 @@ def import_main(obj):
     if import_prc.returncode != 0:
         err_message = '\n'.join(import_prc.stderr.readlines())
         fail(EnvironmentError, err_message)
+    return kwargs
 
-def unit_process(prcname, func, obj):
-    obj['retval']['PROCESS'].append(prcname)
+def succeed(**kwargs):
+    default = {'SUCCESS' : True}
+    if 'retval' in kwargs:
+        kwargs['retval'].update(default)
+    else:
+        kwargs['retval'] = default
+    return kwargs
+
+def unit_process(prcname, func, **kwargs):
+    kwargs['retval']['PROCESSES'].append(prcname)
     try:
-        new_obj = func(obj)
+        kwargs = func(**kwargs)
     except Exception, err:
-        retval = obj['retval']
-        obj['retval'] = update_error(retval, er, prcname)
+        update_error(kwargs['retval'], err, prcname)
         raise
-    return new_obj
+    return kwargs
+
+partial_process = lambda prcname, fun: partial(unit_process, prcname, fun)
+
+def close_session(**kwargs):
+    if 'conn' in kwargs:
+        kwargs['conn']._closeSession()
 
 def import_file(path):
-    ns = {'retval':{'PROCESSES': []}}
-    ns['path'] = path
+    kwargs = {'retval':{'PROCESSES': []}}
+    kwargs['path'] = path
 
     if os.path.isdir(path) or not os.path.exists(path):
         return ({}, False)
@@ -161,34 +170,31 @@ def import_file(path):
     if ' ' in path:
         return ({}, False)
 
-    ns['dirname'] = os.path.dirname(path)
-    ns['filename'] = os.path.basename(path)
+    kwargs['dirname'] = os.path.dirname(path)
+    kwargs['filename'] = os.path.basename(path)
 
-    ns['uname'] = get_owner(path)
-    if uname not in USERS:
+    kwargs['uname'] = get_owner(path)
+    if kwargs['uname'] not in USERS:
         return ({}, False)
 
-    ns['passwd'] = getPassword(uname)
+    kwargs['passwd'] = getPassword(kwargs['uname'])
 
     try:
-        ns = reduce(lambda obj, fun: fun(obj), [
-            partial(partial(unit_process, 'CONNECTING'), connect),
-            partial(partial(unit_process, 'CHROMATIC SHIFT INIT'), init_chromatic_shift)
-            partial(partial(unit_process, 'CHECKING NOT IMIPORTED YET'), check_not_imported_yet),
-            partial(partial(unit_process, 'LOG GETTING'), get_log),
-            partial(partial(unit_process, 'CHROMATIC SHIFT RUNNING'), run_chromatic_shift),
-            partial(partial(unit_process, 'LOG WRITING'), add_log)
-            partial(partial(unit_process, 'IMPORTING'), import_main)
-            ], ns)
+        kwargs = reduce(lambda obj, fun: fun(**obj), [
+            partial_process('CONNECTING', connect),
+            partial_process('CHROMATIC SHIFT INIT', init_chromatic_shift),
+            partial_process('CHECKING NOT IMIPORTED YET', check_not_imported_yet),
+            partial_process('LOG GETTING', get_log),
+            partial_process('CHROMATIC SHIFT RUNNING', run_chromatic_shift),
+            partial_process('LOG WRITING', add_log),
+            partial_process('IMPORTING', import_main),
+            succeed(**kwargs)
+            ], kwargs)
     except Exception, err:
         print >> sys.stderr, err
-        if 'conn' in ns and ns['conn'].connect():
-            ns['conn']._closeSession()
-        return (ns['retval'], True)
 
-    ns['conn']._closeSession()
-    ns['retval']['SUCCESS'] = True
-    return (ns['retval'], True)
+    close_session(**kwargs)
+    return (kwargs['retval'], True)
 
 def import_to_omero(path, pattern=None, ignores=None):
     hidden_pattern = re.compile('^\..*')
@@ -223,7 +229,7 @@ def import_to_omero(path, pattern=None, ignores=None):
                 decon, is_succeeded = deconvolute(child)
             except (OSError, Exception, hikaridecon.DeconvoluteError), err:
                 print >> sys.stderr, err
-                result[child] = update_error({}, err, obj['PROCESSES'][-1])
+                update_error(result[child], err, 'DECONVOLUTION')
                 continue
             if is_succeeded:
                 obj, is_completed = import_file(decon.product_path)

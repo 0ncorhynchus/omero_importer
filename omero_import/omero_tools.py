@@ -21,12 +21,10 @@ def connect_to_omero(uname, passwd):
 
 def get_dataset(conn, name):
     datasets = get_datasets(conn)
-    retval = None
     for dataset in datasets:
         if dataset.getName() == name:
-            retval = dataset
-            break
-    return retval
+            return dataset
+    return None
 
 def create_dataset(conn, name):
     dataset = model.DatasetI()
