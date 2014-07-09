@@ -51,8 +51,12 @@ def get_error_dict(error):
     retval['TYPE'] = str(type(error).mro()[0])
     retval['MESSAGE'] = error.message
     retval['STR'] = error.__str__()
-    if hasattr(error, 'ice_name'):
-        retval['ICE_NAME'] = error.ice_name
+    if hasattr(error, 'errno'):
+        retval['ERRNO'] = error.errno
+    else:
+        retval['ERRNO'] = -1
+    #if hasattr(error, 'ice_name'):
+    #    retval['ICE_NAME'] = error.ice_name
     return retval
 
 def update_error(obj, error, prcname):
@@ -81,7 +85,8 @@ def check_not_imported_yet(**kwargs):
                 imported = True
                 break
     if imported:
-        fail(EnvironmentError, '%s is already imported.' % kwargs['path'])
+        fail(EnvironmentError, errno.EEXIST,
+                '%s is already imported.' % kwargs['path'], kwargs['path'])
     return kwargs
 
 def get_log(**kwargs):
@@ -103,7 +108,7 @@ def get_log(**kwargs):
         logfile = ''.join([dirname, '/', name, '.dv.log'])
 
     if not os.path.exists(logfile):
-        fail(IOError, errno.ENOENT, '', logfile)
+        fail(IOError, errno.ENOENT, 'a logfile %s does not exist.' % logfile, logfile)
 
     kwargs['logfile'] = logfile
     kwargs['dest'] = ''.join(['/omeroimports', kwargs['dirname'], '/', kwargs['zs'].filename])
@@ -119,7 +124,8 @@ def run_chromatic_shift(**kwargs):
 def add_log(**kwargs):
     kwargs['retval']['PROCESSES'].append('LOG WRITING')
     if not write_log(kwargs['logfile'], kwargs['dest'], kwargs['image_uuid']):
-        fail(EnvironmentError, '%s can not be written to %s.' % (kwargs['logfile'], kwargs['dest']))
+        fail(IOError, errno.EIO,
+                '%s can not be written to %s.' % (kwargs['logfile'], kwargs['dest']))
     return kwargs
 
 def import_main(**kwargs):
@@ -127,14 +133,14 @@ def import_main(**kwargs):
             '-s', 'localhost',
             '-u', kwargs['uname'],
             '-w', kwargs['passwd'],
-            '-d', str(dataset.getId()),
-            '-n', zs.filename, dest]
+            '-d', str(kwargs['dataset'].getId()),
+            '-n', kwargs['zs'].filename, kwargs['dest']]
     import_prc = subprocess.Popen(args, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, shell=False)
     import_prc.wait()
     if import_prc.returncode != 0:
         err_message = '\n'.join(import_prc.stderr.readlines())
-        fail(EnvironmentError, err_message)
+        fail(EnvironmentError, import_prc.returncode, err_message, kwargs['path'])
     return kwargs
 
 def succeed(**kwargs):
@@ -158,7 +164,7 @@ partial_process = lambda prcname, fun: partial(unit_process, prcname, fun)
 
 def close_session(**kwargs):
     if 'conn' in kwargs:
-        kwargs['conn']._closeSession()
+        kwargs['conn'].seppuku(softclose=True)
 
 def import_file(path):
     kwargs = {'retval':{'PROCESSES': []}}
@@ -188,7 +194,7 @@ def import_file(path):
             partial_process('CHROMATIC SHIFT RUNNING', run_chromatic_shift),
             partial_process('LOG WRITING', add_log),
             partial_process('IMPORTING', import_main),
-            succeed(**kwargs)
+            succeed
             ], kwargs)
     except Exception, err:
         print >> sys.stderr, err
@@ -208,35 +214,37 @@ def import_to_omero(path, pattern=None, ignores=None):
     for child in children:
         if hidden_pattern.match(child):
             continue
-        child = os.path.join(path, child)
-        if ignores is not None and child in ignores:
+        fullpath = os.path.join(path, child)
+        if ignores is not None and fullpath in ignores:
             continue
-        if not os.access(child, os.R_OK):
+        if not os.access(fullpath, os.R_OK):
             continue
 
-        if os.path.isdir(child):
-            result.update(import_to_omero(child, pattern, ignores))
-        elif pattern is None or pattern.match(child):
-            obj, is_completed = import_file(child)
+        if os.path.isdir(fullpath):
+            result.update(import_to_omero(fullpath, pattern, ignores))
+        elif pattern is None or pattern.match(fullpath):
+            obj, is_completed = import_file(fullpath)
             if not is_completed:
                 continue
-            #result[child] = obj
-            print '"%s": %s' % (path, json.dumps(obj))
-        elif not_shifted_pattern.match(child) and not os.path.exists(child + '_decon'):
+            #result[fullpath] = obj
+            if 'ERROR' not in obj or  'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
+                print '"%s": %s' % (fullpath, json.dumps(obj))
+        elif not_shifted_pattern.match(fullpath) and not os.path.exists(fullpath + '_decon'):
             obj = {}
             obj['PROCESSES'] = ['DECONVOLUTION']
             try:
-                decon, is_succeeded = deconvolute(child)
+                decon, is_succeeded = deconvolute(fullpath)
             except (OSError, Exception, hikaridecon.DeconvoluteError), err:
                 print >> sys.stderr, err
-                update_error(result[child], err, 'DECONVOLUTION')
+                update_error(result[fullpath], err, 'DECONVOLUTION')
                 continue
             if is_succeeded:
                 obj, is_completed = import_file(decon.product_path)
                 if not is_completed:
                     continue
-                #result[child] = obj
-                print '"%s": %s' % (path, json.dumps(obj))
+                #result[fullpath] = obj
+                if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
+                    print '"%s": %s' % (fullpath, json.dumps(obj))
     return result
 
 def main():

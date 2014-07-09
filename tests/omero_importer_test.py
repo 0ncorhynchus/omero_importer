@@ -94,6 +94,7 @@ class TestOmeroImporter(unittest.TestCase):
         self.assertFalse(result[1])
         result = import_file(self.filepath) # this file has already been imported
         self.assertTrue(result[1])
+        self.assertEqual(result[0]['ERROR']['ERRNO'], errno.EEXIST)
 
 if __name__ == '__main__':
     unittest.main()
