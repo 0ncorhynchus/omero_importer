@@ -34,17 +34,17 @@ def get_owner(path):
 
     return None
 
-def deconvolute(path):
+def deconvolute(**kwargs):
     '''
     argument: a file path
     return: a tuple (a Popen instance, success flag)
     can raise OSError, hikaridecon.DeconvoluteError
     '''
-    p = hikaridecon.run(path)
-    if p is None:
-        return (None, False)
-    p.wait()
-    return (p, p.returncode == 0)
+    path = kwargs['path']
+    kwargs['decon'] = hikaridecon.run(path)
+    if kwargs['decon'] is not None:
+        kwargs['decon'].wait()
+    return kwargs
 
 def get_error_dict(error):
     retval = {}
@@ -164,7 +164,7 @@ partial_process = lambda prcname, fun: partial(unit_process, prcname, fun)
 
 def close_session(**kwargs):
     if 'conn' in kwargs:
-        kwargs['conn'].seppuku(softclose=True)
+        kwargs['conn'].seppuku(True)
 
 def import_file(path):
     kwargs = {'retval':{'PROCESSES': []}}
@@ -230,21 +230,23 @@ def import_to_omero(path, pattern=None, ignores=None):
             if 'ERROR' not in obj or  'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
                 print '"%s": %s' % (fullpath, json.dumps(obj))
         elif not_shifted_pattern.match(fullpath) and not os.path.exists(fullpath + '_decon'):
-            obj = {}
-            obj['PROCESSES'] = ['DECONVOLUTION']
+            kwargs = {'path': fullpath, 'retval':{'PROCESSES':[]}}
             try:
-                decon, is_succeeded = deconvolute(fullpath)
-            except (OSError, Exception, hikaridecon.DeconvoluteError), err:
-                print >> sys.stderr, err
-                update_error(result[fullpath], err, 'DECONVOLUTION')
-                continue
-            if is_succeeded:
-                obj, is_completed = import_file(decon.product_path)
-                if not is_completed:
+                kwargs = unit_process('DECONVOLUTION', deconvolute, **kwargs)
+                is_succeeded = 'decon' in kwargs and kwargs['decon'].returncode == 0
+                if is_succeeded:
+                    obj, is_initialized = import_file(kwargs['decon'].product_path)
+                    if not is_initialized:
+                        continue
+                    #result[fullpath] = obj
+                else:
                     continue
-                #result[fullpath] = obj
-                if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
-                    print '"%s": %s' % (fullpath, json.dumps(obj))
+            except Exception, err:
+                print >> sys.stderr, err
+                obj = kwargs['retval']
+
+            if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
+                print '"%s": %s' % (fullpath, json.dumps(obj))
     return result
 
 def main():
