@@ -14,11 +14,11 @@ class TestOmeroImporter(unittest.TestCase):
         self.pattern = re.compile('(.*)_decon')
 
     def test_search_files(self):
-        files = search_files(self.dirpath, self.pattern)
-        self.assertNotEqual(len(files), 0)
-        for f in files:
-            self.assertTrue(os.path.exists(f))
-            self.assertTrue(f[-6:], '_decon')
+        ignore_str = '|'.join([r'.*/\..*', '/home/suguru/wrk', '/home/suguru/log'])
+        ignores = re.compile(ignore_str)
+        for dpath, fname in search_files('/home/suguru', ignores=ignores):
+            self.assertEqual(ignores.match(os.path.join(dpath, fname)), None, '"%s" should be ignored' % fname)
+            self.assertEqual(ignores.match(dpath), None, '"%s" should be ignored' % dpath)
 
     def test_get_owner(self):
         owner = get_owner(self.dirpath)
@@ -40,6 +40,7 @@ class TestOmeroImporter(unittest.TestCase):
                 }
         connected = connect(**kwargs)
         self.assertTrue('conn' in connected)
+        self.assertNotEqual(connected['conn'], None)
         close_session(**connected)
 
     def test_init_chromatic_shift(self):

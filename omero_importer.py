@@ -13,13 +13,16 @@ from settings import *
 from omero_import import *
 import Ice
 
-def search_files(path, pattern=None):
-    retval = []
-    for dpath, dirs, files in os.walk(path):
-        if pattern is not None:
-            files = filter(lambda f: pattern.match(f), files)
-        retval = concat(retval, map(lambda f: os.path.join(dpath, f), files))
-    return retval
+def search_files(path, pattern=None, ignores=None):
+    for root, dirs, files in os.walk(path):
+        ignored_dirs = filter(lambda d: ignores.match(os.path.join(root, d)), dirs)
+        for d in ignored_dirs:
+            dirs.remove(d)
+        filtered = files if pattern is None else filter(lambda f: pattern.match(f), files)
+        filtered_out = files if ignores is None else filter(
+                lambda f: not ignores.match(os.path.join(root, f)), files)
+        for f in filtered_out:
+            yield (root, f)
 
 def get_owner(path):
     uid = os.stat(path).st_uid
@@ -41,9 +44,13 @@ def deconvolute(**kwargs):
     can raise OSError, hikaridecon.DeconvoluteError
     '''
     path = kwargs['path']
-    kwargs['decon'] = hikaridecon.run(path)
-    if kwargs['decon'] is not None:
-        kwargs['decon'].wait()
+    deconvoluted = path + '_decon'
+    if not os.path.exists(deconvoluted):
+        decon = hikaridecon.run(path)
+        decon.wait()
+        if decon.returncode != 0:
+            fail(EnvironmentError, decon.returncode, '\n'.join(decon.stder.readlines(), path))
+    kwargs['path'] = deconvoluted
     return kwargs
 
 def get_error_dict(error):
@@ -64,10 +71,11 @@ def update_error(obj, error, prcname):
     obj['ERROR'] = get_error_dict(error)
     obj['ERROR']['PROCESS'] = prcname
 
-getPassword = lambda uname: USERS[uname]['PASSWORD']
+getPassword = lambda uname: USERS[uname]['PASSWORD'] if uname in USERS else None
 
 def connect(**kwargs):
-    kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
+    if 'conn' not in kwargs or kwargs['conn'] is None:
+        kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
     kwargs['dataset'] = tools.get_dataset(kwargs['conn'], kwargs['dirname'])
     return kwargs
 
@@ -163,12 +171,14 @@ def unit_process(prcname, func, **kwargs):
 partial_process = lambda prcname, fun: partial(unit_process, prcname, fun)
 
 def close_session(**kwargs):
-    if 'conn' in kwargs:
-        kwargs['conn'].seppuku(True)
+    if 'conn' in kwargs and kwargs['conn'] is not None:
+        kwargs['conn'].seppuku()
 
-def import_file(path):
-    kwargs = {'retval':{'PROCESSES': []}}
-    kwargs['path'] = path
+def import_file(path, conn=None):
+    kwargs = {
+            'retval': {'PROCESSES': []},
+            'conn': conn,
+            'path': path}
 
     if os.path.isdir(path) or not os.path.exists(path):
         return ({}, False)
@@ -179,14 +189,15 @@ def import_file(path):
     kwargs['dirname'] = os.path.dirname(path)
     kwargs['filename'] = os.path.basename(path)
 
-    kwargs['uname'] = get_owner(path)
-    if kwargs['uname'] not in USERS:
-        return ({}, False)
-
-    kwargs['passwd'] = getPassword(kwargs['uname'])
+    if conn is None:
+        kwargs['uname'] = get_owner(path)
+        kwargs['passwd'] = getPassword(kwargs['uname'])
+        if kwargs['passwd'] is None:
+            return ({}, False)
 
     try:
         kwargs = reduce(lambda obj, fun: fun(**obj), [
+            partial_process('DECONVOUTION', deconvolute),
             partial_process('CONNECTING', connect),
             partial_process('CHROMATIC SHIFT INIT', init_chromatic_shift),
             partial_process('CHECKING NOT IMIPORTED YET', check_not_imported_yet),
@@ -199,54 +210,35 @@ def import_file(path):
     except Exception, err:
         print >> sys.stderr, err
 
-    close_session(**kwargs)
+    if conn is None:
+        close_session(**kwargs)
     return (kwargs['retval'], True)
 
-def import_to_omero(path, pattern=None, ignores=None):
-    hidden_pattern = re.compile('^\..*')
+def import_to_omero(path, pattern=None, ignores=None, **kwargs):
+    ignore_pattern = re.compile('|'.join(construct(ignores, r'.*\..*')))
     not_shifted_pattern = re.compile('(.*)R3D.dv$')
-    try:
-        children = os.listdir(path)
-    except:
-        return {}
 
     result = {}
-    for child in children:
-        if hidden_pattern.match(child):
-            continue
-        fullpath = os.path.join(path, child)
-        if ignores is not None and fullpath in ignores:
-            continue
+    for dpath, fname in search_files(path, pattern, ignore_pattern):
+        fullpath = os.path.join(dpath, fname)
         if not os.access(fullpath, os.R_OK):
             continue
+        next_kwargs = {'conn': None}
+        next_kwargs.update(kwargs)
+        if 'conn' not in kwargs or kwargs['conn'] is None:
+            uname = get_owner(fullpath)
+            passwd = getPassword(uname)
+            if passwd is not None:
+                next_kwargs['conn'] = tools.connect_to_omero(uname, passwd)
+        obj, is_completed = import_file(fullpath, next_kwargs['conn'])
+        if not is_completed:
+            continue
+        #result[fullpath] = obj
+        if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
+            print '"%s": %s' % (fullpath, json.dumps(obj))
 
-        if os.path.isdir(fullpath):
-            result.update(import_to_omero(fullpath, pattern, ignores))
-        elif pattern is None or pattern.match(fullpath):
-            obj, is_completed = import_file(fullpath)
-            if not is_completed:
-                continue
-            #result[fullpath] = obj
-            if 'ERROR' not in obj or  'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
-                print '"%s": %s' % (fullpath, json.dumps(obj))
-        elif not_shifted_pattern.match(fullpath) and not os.path.exists(fullpath + '_decon'):
-            kwargs = {'path': fullpath, 'retval':{'PROCESSES':[]}}
-            try:
-                kwargs = unit_process('DECONVOLUTION', deconvolute, **kwargs)
-                is_succeeded = 'decon' in kwargs and kwargs['decon'].returncode == 0
-                if is_succeeded:
-                    obj, is_initialized = import_file(kwargs['decon'].product_path)
-                    if not is_initialized:
-                        continue
-                    #result[fullpath] = obj
-                else:
-                    continue
-            except Exception, err:
-                print >> sys.stderr, err
-                obj = kwargs['retval']
-
-            if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
-                print '"%s": %s' % (fullpath, json.dumps(obj))
+    if 'conn' in kwargs and kwargs['conn'] is not None:
+        close_session(**kwargs)
     return result
 
 def main():
