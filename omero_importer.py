@@ -49,7 +49,8 @@ def deconvolute(**kwargs):
         decon = hikaridecon.run(path)
         decon.wait()
         if decon.returncode != 0:
-            fail(EnvironmentError, decon.returncode, '\n'.join(decon.stder.readlines(), path))
+            fail(hikaridecon.DeconvoluteError, decon.returncode,
+                    '\n'.join(decon.stderr.readlines()), path)
     kwargs['path'] = deconvoluted
     return kwargs
 

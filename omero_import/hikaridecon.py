@@ -5,6 +5,7 @@ import sys
 import subprocess
 import re
 import time
+import errno
 
 class HikariDecon:
     def __init__(self, jobcode, path):
@@ -44,7 +45,8 @@ def run(path):
 
     if filesize >= 2 * 1024 * 1024 * 1024:
         size_gigabyte = filesize / 1024 / 1024 / 1024
-        raise DeconvoluteError(1, 'File size %d Gb is over 2Gb' % size_gigabyte, path)
+        raise DeconvoluteError(errno.EFBIG,
+                'File size %d Gb is over 2Gb' % size_gigabyte, path)
 
     basename = os.path.basename(path)
     os.chdir(dirname)
@@ -57,7 +59,8 @@ def run(path):
 
     os.chdir(pwd)
     if p.returncode != 0:
-        return None
+        raise DeconvoluteError(p.returncode,
+                '\n'.join(p.stderr.readlines()), path)
 
     outputs = p.stdout.readlines()
     pattern = re.compile('^Your job ([0-9]*)(.*)')
@@ -68,7 +71,8 @@ def run(path):
             jobcode = int(match.group(1))
             break
     if jobcode == -1:
-        return None
+        raise DeconvoluteError(errno.ENOMSG,
+                'Cannot get any jobcode', path)
 
     retval = HikariDecon(jobcode, path)
     return retval
