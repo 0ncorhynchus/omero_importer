@@ -50,7 +50,7 @@ def deconvolute(**kwargs):
         decon.wait()
         if decon.returncode != 0:
             fail(hikaridecon.DeconvoluteError, decon.returncode,
-                    '\n'.join(decon.stderr.readlines()), path)
+                    decon.stderr, path)
     kwargs['path'] = deconvoluted
     return kwargs
 
@@ -77,7 +77,7 @@ getPassword = lambda uname: USERS[uname]['PASSWORD'] if uname in USERS else None
 def connect(**kwargs):
     if 'conn' not in kwargs or kwargs['conn'] is None:
         kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
-    kwargs['dataset'] = tools.get_dataset(kwargs['conn'], kwargs['dirname'])
+    kwargs['dataset'] = tools.get_dataset(kwargs['conn'], os.path.dirname(kwargs['path']))
     return kwargs
 
 def init_chromatic_shift(**kwargs):
@@ -87,7 +87,7 @@ def init_chromatic_shift(**kwargs):
 def check_not_imported_yet(**kwargs):
     imported = False
     if kwargs['dataset'] is None:
-        kwargs['dataset'] = tools.create_dataset(kwargs['conn'], kwargs['dirname'])
+        kwargs['dataset'] = tools.create_dataset(kwargs['conn'], os.path.dirname(kwargs['path']))
     else:
         for image in kwargs['dataset'].listChildren():
             if image.getName() == kwargs['zs'].filename:
@@ -109,18 +109,15 @@ def get_log(**kwargs):
     dirname = os.path.dirname(path)
     name, exp = os.path.basename(path).rsplit('.',1)
 
-    logfile = ''
-    if exp == 'dv_decon':
-        logfile = dirname + '/' + name + '.dv.log'
-    elif exp == 'dv':
+    if exp == 'dv':
         name = name.replace('_D3D','')
-        logfile = ''.join([dirname, '/', name, '.dv.log'])
+    logfile = ''.join([dirname, '/', name, '.dv.log'])
 
     if not os.path.exists(logfile):
         fail(IOError, errno.ENOENT, 'a logfile %s does not exist.' % logfile, logfile)
 
     kwargs['logfile'] = logfile
-    kwargs['dest'] = ''.join(['/omeroimports', kwargs['dirname'], '/', kwargs['zs'].filename])
+    kwargs['dest'] = ''.join(['/omeroimports', dirname, '/', kwargs['zs'].filename])
     kwargs['image_uuid'] = str(uuid.uuid4())
 
     return kwargs
@@ -187,9 +184,6 @@ def import_file(path, conn=None):
     if ' ' in path:
         return ({}, False)
 
-    kwargs['dirname'] = os.path.dirname(path)
-    kwargs['filename'] = os.path.basename(path)
-
     if conn is None:
         kwargs['uname'] = get_owner(path)
         kwargs['passwd'] = getPassword(kwargs['uname'])
@@ -215,31 +209,31 @@ def import_file(path, conn=None):
         close_session(**kwargs)
     return (kwargs['retval'], True)
 
-def import_to_omero(path, pattern=None, ignores=None, **kwargs):
+def import_to_omero(path, pattern=None, ignores=None):
     ignore_pattern = re.compile('|'.join(construct(ignores, r'.*\..*')))
-    not_shifted_pattern = re.compile('(.*)R3D.dv$')
 
     result = {}
+    uname = ''
+    conn = None
     for dpath, fname in search_files(path, pattern, ignore_pattern):
         fullpath = os.path.join(dpath, fname)
         if not os.access(fullpath, os.R_OK):
             continue
-        next_kwargs = {'conn': None}
-        next_kwargs.update(kwargs)
-        if 'conn' not in kwargs or kwargs['conn'] is None:
-            uname = get_owner(fullpath)
-            passwd = getPassword(uname)
-            if passwd is not None:
-                next_kwargs['conn'] = tools.connect_to_omero(uname, passwd)
-        obj, is_completed = import_file(fullpath, next_kwargs['conn'])
+        owner = get_owner(fullpath)
+        if uname != owner:
+            passwd = getPassword(owner)
+            if passwd is None:
+                continue
+            uname = owner
+            close_session(conn=conn)
+            conn = tools.connect_to_omero(uname, passwd)
+        obj, is_completed = import_file(fullpath, conn)
         if not is_completed:
             continue
         #result[fullpath] = obj
         if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
             print '"%s": %s' % (fullpath, json.dumps(obj))
-
-    if 'conn' in kwargs and kwargs['conn'] is not None:
-        close_session(**kwargs)
+    close_session(conn=conn)
     return result
 
 def main():
@@ -253,7 +247,7 @@ def main():
         paths = argv
 
     ignores = DEFAULT['IGNORES']
-    pattern = re.compile('(.*)_decon$')
+    pattern = re.compile('(.*)\.dv_decon$')
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     result = {}

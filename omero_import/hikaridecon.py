@@ -11,6 +11,7 @@ class HikariDecon:
     def __init__(self, jobcode, path):
         self._path = path
         self._returncode = 0
+        self._stderr = ''
         self._jobcode = jobcode
 
     def wait(self):
@@ -28,6 +29,7 @@ class HikariDecon:
         if os.path.exists(self._path + '_decon'):
             self._returncode = 0
         else:
+            self._stderr = 'The deconvoluted file is not found.'
             self._returncode = 1
 
     @property
@@ -37,6 +39,10 @@ class HikariDecon:
     @property
     def returncode(self):
         return self._returncode
+
+    @property
+    def stderr(self):
+        return self._stderr
 
 def run(path):
     pwd = os.getcwd()

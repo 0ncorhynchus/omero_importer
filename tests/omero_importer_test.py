@@ -10,7 +10,8 @@ class TestOmeroImporter(unittest.TestCase):
 
     def setUp(self):
         self.dirpath = '/data5/suguru/test'
-        self.filepath = '/data5/suguru/test/sample_R3D.dv_decon'
+        self.filepath = '/data5/suguru/test/sample_R3D.dv'
+        self.deconpath = '/data5/suguru/test/sample_R3D.dv_decon'
         self.pattern = re.compile('(.*)_decon')
 
     def test_search_files(self):
@@ -23,7 +24,7 @@ class TestOmeroImporter(unittest.TestCase):
     def test_get_owner(self):
         owner = get_owner(self.dirpath)
         self.assertEqual(owner, 'suguru')
-        owner = get_owner(self.filepath)
+        owner = get_owner(self.deconpath)
         self.assertEqual(owner, 'suguru')
 
     def test_close_session(self):
@@ -36,7 +37,7 @@ class TestOmeroImporter(unittest.TestCase):
         kwargs = {
                 'uname': 'suguru',
                 'passwd': 'omx',
-                'dirname': self.dirpath
+                'path': self.deconpath
                 }
         connected = connect(**kwargs)
         self.assertTrue('conn' in connected)
@@ -44,14 +45,14 @@ class TestOmeroImporter(unittest.TestCase):
         close_session(**connected)
 
     def test_init_chromatic_shift(self):
-        kwargs = init_chromatic_shift(path=self.filepath)
+        kwargs = init_chromatic_shift(path=self.deconpath)
         self.assertTrue('zs' in kwargs)
 
     def test_check_not_imported_yet(self):
         kwargs = {
                 'uname': 'suguru',
                 'passwd': 'omx',
-                'path': self.filepath,
+                'path': self.deconpath,
                 'dirname': self.dirpath
                 }
         connected = init_chromatic_shift(**connect(**kwargs))
@@ -59,11 +60,7 @@ class TestOmeroImporter(unittest.TestCase):
             check_not_imported_yet(**connected)
 
     def test_get_log(self):
-        kwargs = {
-                'path' : self.filepath,
-                'dirname' : self.dirpath,
-                'zs': ChromaticShift(self.filepath)
-                }
+        kwargs = init_chromatic_shift(path=self.deconpath)
         with self.assertRaises(ValueError):
             get_log(path=self.dirpath)
         try:
@@ -73,12 +70,12 @@ class TestOmeroImporter(unittest.TestCase):
         self.assertTrue(os.path.exists(logpath))
 
     def test_succeed(self):
-        succeeded = succeed(path=self.filepath)
+        succeeded = succeed(path=self.deconpath)
         self.assertTrue('retval' in succeeded)
         self.assertTrue('SUCCESS' in succeeded['retval'])
         self.assertTrue(succeeded['retval']['SUCCESS'])
         self.assertTrue('path' in succeeded)
-        self.assertEqual(succeeded['path'], self.filepath)
+        self.assertEqual(succeeded['path'], self.deconpath)
 
     def test_unit_process(self):
         kwargs = {'retval': {'PROCESSES': []}}
