@@ -77,7 +77,20 @@ getPassword = lambda uname: USERS[uname]['PASSWORD'] if uname in USERS else None
 def connect(**kwargs):
     if 'conn' not in kwargs or kwargs['conn'] is None:
         kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
-    kwargs['dataset'] = tools.get_dataset(kwargs['conn'], os.path.dirname(kwargs['path']))
+    error = None
+    for i in xrange(3): # try to connect 3 times
+        try:
+            kwargs['dataset'] = tools.get_dataset(kwargs['conn'], os.path.dirname(kwargs['path']))
+        except Exception, err:
+            close_session(**kwargs)
+            kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
+            error = err
+            continue
+        error = None
+        break
+    else:
+        if error is not None:
+            raise error
     return kwargs
 
 def init_chromatic_shift(**kwargs):
@@ -205,7 +218,7 @@ def import_file(path, conn=None):
     except Exception, err:
         print >> sys.stderr, err
 
-    if conn is None:
+    if conn is not None:
         close_session(**kwargs)
     return (kwargs['retval'], True)
 

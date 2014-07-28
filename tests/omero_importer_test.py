@@ -42,6 +42,7 @@ class TestOmeroImporter(unittest.TestCase):
         connected = connect(**kwargs)
         self.assertTrue('conn' in connected)
         self.assertNotEqual(connected['conn'], None)
+        self.assertTrue(connected['conn'].isConnected())
         close_session(**connected)
 
     def test_init_chromatic_shift(self):
