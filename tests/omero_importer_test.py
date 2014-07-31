@@ -12,14 +12,16 @@ class TestOmeroImporter(unittest.TestCase):
         self.dirpath = '/data5/suguru/test'
         self.filepath = '/data5/suguru/test/sample_R3D.dv'
         self.deconpath = '/data5/suguru/test/sample_R3D.dv_decon'
-        self.pattern = re.compile('(.*)_decon')
+        self.pattern = re.compile('^(.*)R3D\.dv$')
 
     def test_search_files(self):
-        ignore_str = '|'.join([r'.*/\..*', '/home/suguru/wrk', '/home/suguru/log'])
-        ignores = re.compile(ignore_str)
-        for dpath, fname in search_files('/home/suguru', ignores=ignores):
-            self.assertEqual(ignores.match(os.path.join(dpath, fname)), None, '"%s" should be ignored' % fname)
-            self.assertEqual(ignores.match(dpath), None, '"%s" should be ignored' % dpath)
+        ignore_str = '|'.join([r'.*/\..*', '/data5/suguru/omero-imports'])
+        ignore_pattern = re.compile(ignore_str)
+        for dpath, fname in search_files('/data5/suguru/', self.pattern, ignore_pattern):
+            fullpath = os.path.join(dpath,fname)
+            self.assertEqual(fname[-6:], 'R3D.dv')
+            self.assertEqual(ignore_pattern.match(dpath), None)
+            print >> sys.stderr, fullpath
 
     def test_get_owner(self):
         owner = get_owner(self.dirpath)

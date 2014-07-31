@@ -13,14 +13,14 @@ from settings import *
 from omero_import import *
 import Ice
 
-def search_files(path, pattern=None, ignores=None):
+def search_files(path, pattern=None, ignore_pattern=None):
     for root, dirs, files in os.walk(path):
-        ignored_dirs = filter(lambda d: ignores.match(os.path.join(root, d)), dirs)
+        ignored_dirs = filter(lambda d: ignore_pattern.match(os.path.join(root, d)), dirs)
         for d in ignored_dirs:
             dirs.remove(d)
-        filtered = files if pattern is None else filter(lambda f: pattern.match(f), files)
-        filtered_out = files if ignores is None else filter(
-                lambda f: not ignores.match(os.path.join(root, f)), files)
+        filtered = files if pattern is None else filter(lambda f: pattern.match(f) is not None, files)
+        filtered_out = filtered if ignore_pattern is None else filter(
+                lambda f: ignore_pattern.match(os.path.join(root, f)) is None, filtered)
         for f in filtered_out:
             yield (root, f)
 
@@ -37,12 +37,12 @@ def get_owner(path):
 
     return None
 
+'''
+argument: a file path
+return: a tuple (a Popen instance, success flag)
+can raise OSError, hikaridecon.DeconvoluteError
+'''
 def deconvolute(**kwargs):
-    '''
-    argument: a file path
-    return: a tuple (a Popen instance, success flag)
-    can raise OSError, hikaridecon.DeconvoluteError
-    '''
     path = kwargs['path']
     deconvoluted = path + '_decon'
     if not os.path.exists(deconvoluted):
@@ -111,13 +111,12 @@ def check_not_imported_yet(**kwargs):
                 '%s is already imported.' % kwargs['path'], kwargs['path'])
     return kwargs
 
+'''
+argument: a file path
+return: the log file path
+can raise ValueError, IOError
+'''
 def get_log(**kwargs):
-    '''
-    argument: a file path
-    return: the log file path
-    can raise ValueError, IOError
-    '''
-
     path = kwargs['path']
     dirname = os.path.dirname(path)
     name, exp = os.path.basename(path).rsplit('.',1)
@@ -185,23 +184,28 @@ def close_session(**kwargs):
     if 'conn' in kwargs and kwargs['conn'] is not None:
         kwargs['conn'].seppuku()
 
-def import_file(path, conn=None):
+'''
+!!! path = .*_R3D.dv !!!
+'''
+def import_file(path, uname=None, passwd=None, conn=None):
+    if uname is None or passwd is None:
+        uname = get_owner(path)
+        passwd = getPassword(uname)
+        if passwd is None:
+            return ({}, False)
+
     kwargs = {
             'retval': {'PROCESSES': []},
-            'conn': conn,
-            'path': path}
+            'path': path,
+            'uname': uname,
+            'passwd': passwd,
+            'conn': conn}
 
     if os.path.isdir(path) or not os.path.exists(path):
         return ({}, False)
 
     if ' ' in path:
         return ({}, False)
-
-    if conn is None:
-        kwargs['uname'] = get_owner(path)
-        kwargs['passwd'] = getPassword(kwargs['uname'])
-        if kwargs['passwd'] is None:
-            return ({}, False)
 
     try:
         kwargs = reduce(lambda obj, fun: fun(**obj), [
@@ -223,13 +227,15 @@ def import_file(path, conn=None):
     return (kwargs['retval'], True)
 
 def import_to_omero(path, pattern=None, ignores=None):
-    ignore_pattern = re.compile('|'.join(construct(ignores, r'.*\..*')))
+    ignore_pattern = re.compile('|'.join(construct(ignores, r'.*/\..*')))
 
     result = {}
     uname = ''
     conn = None
+    print >> sys.stderr, '[LOG] path: %s' % path
     for dpath, fname in search_files(path, pattern, ignore_pattern):
         fullpath = os.path.join(dpath, fname)
+        print >> sys.stderr, '[LOG] checking for "%s"' % fullpath
         if not os.access(fullpath, os.R_OK):
             continue
         owner = get_owner(fullpath)
@@ -240,7 +246,7 @@ def import_to_omero(path, pattern=None, ignores=None):
             uname = owner
             close_session(conn=conn)
             conn = tools.connect_to_omero(uname, passwd)
-        obj, is_completed = import_file(fullpath, conn)
+        obj, is_completed = import_file(fullpath, uname, passwd, conn)
         if not is_completed:
             continue
         #result[fullpath] = obj
@@ -260,7 +266,7 @@ def main():
         paths = argv
 
     ignores = DEFAULT['IGNORES']
-    pattern = re.compile('(.*)\.dv_decon$')
+    pattern = re.compile('^(.*)R3D\.dv$')
     # only import files deconvoluted with hikaridecon
     # pattern = re.compile('(.*)(R3D_D3D\.dv|_decon)$')
     result = {}
