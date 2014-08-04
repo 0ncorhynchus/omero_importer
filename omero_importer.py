@@ -107,8 +107,7 @@ def check_not_imported_yet(**kwargs):
                 imported = True
                 break
     if imported:
-        fail(EnvironmentError, errno.EEXIST,
-                '%s is already imported.' % kwargs['path'], kwargs['path'])
+        fail(EnvironmentError, errno.EEXIST, 'Have already imported', kwargs['path'])
     return kwargs
 
 '''
@@ -126,7 +125,7 @@ def get_log(**kwargs):
     logfile = ''.join([dirname, '/', name, '.dv.log'])
 
     if not os.path.exists(logfile):
-        fail(IOError, errno.ENOENT, 'a logfile %s does not exist.' % logfile, logfile)
+        fail(IOError, errno.ENOENT, 'No such file or directory' % logfile, logfile)
 
     kwargs['logfile'] = logfile
     kwargs['dest'] = ''.join(['/omeroimports', dirname, '/', kwargs['zs'].filename])
@@ -142,8 +141,7 @@ def run_chromatic_shift(**kwargs):
 def add_log(**kwargs):
     kwargs['retval']['PROCESSES'].append('LOG WRITING')
     if not write_log(kwargs['logfile'], kwargs['dest'], kwargs['image_uuid']):
-        fail(IOError, errno.EIO,
-                '%s can not be written to %s.' % (kwargs['logfile'], kwargs['dest']))
+        fail(IOError, errno.EIO, '%s can not be written to %s.' % (kwargs['logfile'], kwargs['dest']))
     return kwargs
 
 def import_main(**kwargs):
