@@ -228,8 +228,7 @@ def import_to_omero(path, pattern=None, ignores=None):
     ignore_pattern = re.compile('|'.join(construct(ignores, r'.*/\..*')))
 
     result = {}
-    uname = ''
-    conn = None
+    connects = {}
     print >> sys.stderr, '[LOG] path: %s' % path
     for dpath, fname in search_files(path, pattern, ignore_pattern):
         fullpath = os.path.join(dpath, fname)
@@ -237,20 +236,19 @@ def import_to_omero(path, pattern=None, ignores=None):
         if not os.access(fullpath, os.R_OK):
             continue
         owner = get_owner(fullpath)
-        if uname != owner:
+        if owner not in connects:
             passwd = getPassword(owner)
             if passwd is None:
                 continue
-            uname = owner
-            close_session(conn=conn)
-            conn = tools.connect_to_omero(uname, passwd)
-        obj, is_completed = import_file(fullpath, uname, passwd, conn)
+            connects[owner] = tools.connect_to_omero(owner, passwd)
+        obj, is_completed = import_file(fullpath, owner, passwd, connects[owner])
         if not is_completed:
             continue
         #result[fullpath] = obj
         if 'ERROR' not in obj or 'ERRNO' not in obj['ERROR'] or obj['ERROR']['ERRNO'] != errno.EEXIST:
             print '"%s": %s' % (fullpath, json.dumps(obj))
-    close_session(conn=conn)
+    for uname, conn in connects:
+        close_session(conn=conn)
     return result
 
 def main():
