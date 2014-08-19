@@ -10,15 +10,18 @@ import struct
     #header_format = '<iiiiiiiiiiffffffiiifffiihhi24shhhhffffffhhhhhhffhhfffhhhhhhfffi'
     #title_format = '80s80s80s80s80s80s80s80s80s80s'
 
+generate_format = lambda t, r: {'title':t, 'regular':r}
+
 log_formats = [
-        {'title': 'image_file', 'regular': r'(\s*)Resolve3D Image File:(\s*)'},
-        {'title': 'created', 'regular': r'(\s*)Created(\s*)'},
-        {'title': 'objective', 'regular': r'(\s*)Objective:(\s*)'},
-        {'title': 'type', 'regular': r'(\s*)Type:(\s*)'},
-        {'title': 'gain', 'regular': r'(\s*)Gain:(\s*)'},
-        {'title': 'speed', 'regular': r'(\s*)Speed:(\s*)'},
-        {'title': 'sectionz', 'regular': r'(\s*)SECTIONZ(\s*)'},
-        {'title': 'coordinates', 'regular': r'(\s*)Stage coordinates:(\s)'}]
+        generate_format('image_file', r'^\s*Resolve3D Image File:\s*(.*)$'),
+        generate_format('created', r'^\s*Created\s*(.*)$'),
+        generate_format('objective', r'^\s*Objective:\s*(.*)$'),
+        generate_format('type', r'^\s*Type:\s*(.*)$'),
+        generate_format('gain', r'^\s*Gain:\s*(.*)$'),
+        generate_format('speed', r'^\s*Speed:\s*(.*)$'),
+        generate_format('sectionz', r'^\s*SECTIONZ\s*(.*)$'),
+        generate_format('coordinates', r'^\s*Stage coordinates\s*(.*)$')
+        ]
 
 regulars = [
         r'(\s*)Resolve3D Image File:(\s*)',
@@ -42,18 +45,8 @@ filters = [
         r'(\s*)FILTERS(\s*)',
         r'(\s*)CCD(\s*)']
 
-def translate_space(string):
-    return string.lstrip().rstrip('\n').rstrip()
-#    string = string.lstrip()
-#    string = string.rstrip('\n')
-#    string = string.rstrip()
-#    return string
-
-def translate_80s(string):
-    length = len(string)
-    for i in range(80-length):
-        string = string+' '
-    return string
+translate_space = lambda string: string.lstrip().rstrip('\n').rstrip()
+translate_80s = lambda string: format(string, '80s')
 
 def read_log_file(logfile_name):
     data = {}
