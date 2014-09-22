@@ -54,6 +54,9 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(isNotNone([]))
         self.assertTrue(isNotNone(0))
 
+    def test_log(self):
+        log('Test %s' % 'hogehoge')
+
     def test_fail(self):
         with self.assertRaises(IOError) as cm:
             fail(IOError, 36, "exception message")

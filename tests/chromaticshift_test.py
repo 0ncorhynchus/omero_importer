@@ -8,13 +8,17 @@ from omero_import import ChromaticShift, ChromaticShiftError
 class TestChromaticShift(unittest.TestCase):
 
     def setUp(self):
-        self.invalid_filename = '2013_4_10_Kafer_Exp49_Slide1a01_R3D.dv_decon'
-        self.filename = '/data2/gkafer/Exp49/2013_4_10_Kafer_Exp49_Slide1a01_R3D.dv_decon'
+        self.invalid_filename = 'sample_R3D.dv_decon'
+        self.filename = '/data5/suguru/test/sample_R3D.dv_decon'
         self.shift = ChromaticShift(self.filename)
 
     def test_constructor(self):
         with self.assertRaises(ChromaticShiftError):
             error_shift = ChromaticShift(self.invalid_filename)
+
+    def test_is_already_done(self):
+        self.assertFalse(self.shift.is_already_done('/data5/suguru/sample_R3D.dv_decon.zs'))
+        self.assertTrue(self.shift.is_already_done('/data5/suguru/test/sample_R3D.dv_decon.zs'))
 
     def test_path(self):
         self.assertNotEqual(self.shift.path, '')

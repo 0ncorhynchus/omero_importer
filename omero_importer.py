@@ -128,14 +128,16 @@ def get_log(**kwargs):
         fail(IOError, errno.ENOENT, 'No such file or directory' % logfile, logfile)
 
     kwargs['logfile'] = logfile
-    kwargs['dest'] = ''.join(['/omeroimports', dirname, '/', kwargs['zs'].filename])
+    #kwargs['dest'] = ''.join(['/omeroimports', dirname, '/', kwargs['zs'].filename])
+    kwargs['dest'] = os.path.join(dirname, kwargs['zs'].filename)
     kwargs['image_uuid'] = str(uuid.uuid4())
 
     return kwargs
 
 def run_chromatic_shift(**kwargs):
-    kwargs['zs'].do()
-    kwargs['zs'].move(kwargs['dest'])
+    if not kwargs['zs'].is_already_done(kwargs['dest']):
+        kwargs['zs'].do()
+        kwargs['zs'].move(kwargs['dest'])
     return kwargs
 
 def add_log(**kwargs):
@@ -145,12 +147,14 @@ def add_log(**kwargs):
     return kwargs
 
 def import_main(**kwargs):
-    args = ['/opt/omero445/importer-cli',
+    args = ['/home/pcarlton/OMERO5/OMERO.clients-5.0.3-ice35-b41.linux/importer-cli',
             '-s', 'localhost',
             '-u', kwargs['uname'],
             '-w', kwargs['passwd'],
             '-d', str(kwargs['dataset'].getId()),
-            '-n', kwargs['zs'].filename, kwargs['dest']]
+            '-n', kwargs['zs'].filename,
+            '--','--transfer=ln_s',
+            kwargs['dest']]
     import_prc = subprocess.Popen(args, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, shell=False)
     import_prc.wait()

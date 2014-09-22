@@ -8,6 +8,7 @@ import subprocess
 class ChromaticShift:
     def __init__(self, path):
         self._filename = os.path.basename(path) + '.zs'
+        self._origin = path
         args = ['/opt/bin/chromatic-shift', path]
         try:
             p = subprocess.Popen(args, stdout=subprocess.PIPE,
@@ -18,6 +19,15 @@ class ChromaticShift:
             self._commands = p.stdout.readlines()
         except (OSError, ValueError, ChromaticShiftError), err:
             raise
+
+    def is_already_done(self, path=None):
+        if path is None:
+            path = self.path
+        if not os.path.exists(path):
+            return False
+        shifted_stamp = os.stat(path).st_mtime
+        origin_stamp = os.stat(self._origin).st_mtime
+        return shifted_stamp > origin_stamp
 
     @property
     def path(self):
@@ -40,6 +50,8 @@ class ChromaticShift:
             raise
 
     def move(self, dest):
+        if self.path == dest:
+            return True
         dest_dir = os.path.dirname(dest)
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
