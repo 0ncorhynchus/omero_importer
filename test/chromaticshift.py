@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-import sys
 import os
-sys.path.append(os.pardir)
 from omero_import import ChromaticShift, ChromaticShiftError
 
 class TestChromaticShift(unittest.TestCase):

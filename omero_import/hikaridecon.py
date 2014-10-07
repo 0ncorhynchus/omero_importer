@@ -6,6 +6,7 @@ import subprocess
 import re
 import time
 import errno
+from distutils.spawn import find_executable
 
 class HikariDecon:
     def __init__(self, jobcode, path):
@@ -44,26 +45,37 @@ class HikariDecon:
     def stderr(self):
         return self._stderr
 
-def run(path):
-    pwd = os.getcwd()
-    dirname = os.path.dirname(path)
+def check_size(path, max_size):
     filesize = os.path.getsize(path)
+    return (filesize, filesize <= max_size)
 
-    if filesize >= 2 * 1024 * 1024 * 1024:
-        size_gigabyte = filesize / 1024 / 1024 / 1024
+def alert_size(path, max_size):
+    filesize, flg = check_size(path, max_size)
+    if not flg:
+        size_gb = filesize / 1024 / 1024 / 1024
         raise DeconvoluteError(errno.EFBIG,
-                'File size %d Gb is over 2Gb' % size_gigabyte, path)
+                'File size %d Gb is over 2Gb' % size_gb, path)
 
+def run(path):
+    cwd = os.getcwd()
+    dirname = os.path.dirname(path)
     basename = os.path.basename(path)
+
+    alert_size(path, 2 * 1024 * 1024 * 1024)
+
+    hikaridecon = 'hikaridecon'
     os.chdir(dirname)
+    if not find_executable(hikaridecon):
+        raise DeconvoluteError(0,
+                '\'%s\' is not executable.' % hikaridecon)
     try:
-        p = subprocess.Popen(['hikaridecon', basename],
+        p = subprocess.Popen([hikaridecon, basename],
                 stdout=subprocess.PIPE, shell=False)
         p.wait()
     except OSError, e:
         raise
 
-    os.chdir(pwd)
+    os.chdir(cwd)
     if p.returncode != 0:
         raise DeconvoluteError(p.returncode,
                 '\n'.join(p.stderr.readlines()), path)

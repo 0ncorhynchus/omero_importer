@@ -2,9 +2,7 @@
 
 import unittest
 import sys
-import os
-sys.path.append(os.path.join(os.pardir,'omero_import'))
-from functions import *
+from omero_import.functions import *
 
 class TestFunctions(unittest.TestCase):
 
