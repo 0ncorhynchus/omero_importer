@@ -8,10 +8,10 @@ if [ "$?" -ne 0 ]; then
 fi
 omero logout
 
-# checking whether /data2 is mounted
-mounts=`grep /data2 /proc/mounts`
+# checking whether /data5 is mounted
+mounts=`grep /data5 /proc/mounts`
 if [ -z "$mounts" ]; then
-    echo '[ERROR] /data2 is not mounted.'
+    echo '[ERROR] /data5 is not mounted.'
     exit 2
 fi
 
