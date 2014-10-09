@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-import sys
-import os
-sys.path.append(os.pardir)
-from omero_import import ImageFile
+from src import ImageFile
 
 class TestImageFile(unittest.TestCase):
 

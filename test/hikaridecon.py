@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding:utf-8 -*-
 import unittest
-from omero_import import hikaridecon
+from src import hikaridecon
 
 class TestHikariDeconFunctions(unittest.TestCase):
     def setUp(self):

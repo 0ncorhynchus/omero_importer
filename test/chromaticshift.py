@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import unittest
 import os
-from omero_import import ChromaticShift, ChromaticShiftError
+import sys
+from src import ChromaticShift, ChromaticShiftError
 
 class TestChromaticShift(unittest.TestCase):
 

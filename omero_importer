@@ -24,6 +24,6 @@ fi
 
 touch $running_file
 
-python omero_importer.py $@
+python src/omero_importer.py $@
 
 rm $running_file

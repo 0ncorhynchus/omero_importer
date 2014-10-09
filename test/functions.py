@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import sys
-from omero_import.functions import *
+from src.functions import *
 
 class TestFunctions(unittest.TestCase):
 

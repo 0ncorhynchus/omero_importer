@@ -10,7 +10,9 @@ import subprocess
 import json
 
 from settings import *
-from omero_import import *
+from functions import *
+import omero_tools as tools
+from chromaticshift import ChromaticShift
 import Ice
 
 def search_files(path, pattern=None, ignore_pattern=None):

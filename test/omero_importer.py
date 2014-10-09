@@ -3,8 +3,7 @@ import unittest
 import sys
 import os
 import re
-sys.path.append(os.pardir)
-from omero_importer import *
+from src.omero_importer import *
 
 class TestOmeroImporter(unittest.TestCase):
 
