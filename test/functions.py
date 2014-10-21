@@ -52,7 +52,16 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(isNotNone(0))
 
     def test_log(self):
-        log('Test %s' % 'hogehoge')
+        self.assertEqual(log('TAG', sys.stdout, 'spam'), '[TAG]      spam')
+        self.assertEqual(log('TAG', sys.stdout, 'hoge'), '[TAG]      hoge')
+
+    def test_info(self):
+        self.assertEqual(info('spam'), '[INFO]     spam')
+        self.assertEqual(info('ham'), '[INFO]     ham')
+
+    def test_error(self):
+        self.assertEqual(error('hoge'), '[ERROR]    hoge')
+        self.assertEqual(error('spam'), '[ERROR]    spam')
 
     def test_fail(self):
         with self.assertRaises(IOError) as cm:

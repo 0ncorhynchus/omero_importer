@@ -11,6 +11,7 @@ import json
 
 from settings import *
 from functions import *
+import hikaridecon
 import omero_tools as tools
 from chromaticshift import ChromaticShift
 import Ice
@@ -56,22 +57,22 @@ def deconvolute(**kwargs):
     kwargs['path'] = deconvoluted
     return kwargs
 
-def get_error_dict(error):
+def get_err_dict(err):
     retval = {}
-    retval['TYPE'] = str(type(error).mro()[0])
-    retval['MESSAGE'] = error.message
-    retval['STR'] = error.__str__()
-    if hasattr(error, 'errno'):
-        retval['ERRNO'] = error.errno
+    retval['TYPE'] = str(type(err).mro()[0])
+    retval['MESSAGE'] = err.message
+    retval['STR'] = err.__str__()
+    if hasattr(err, 'errno'):
+        retval['ERRNO'] = err.errno
     else:
         retval['ERRNO'] = -1
-    #if hasattr(error, 'ice_name'):
-    #    retval['ICE_NAME'] = error.ice_name
+    #if hasattr(err, 'ice_name'):
+    #    retval['ICE_NAME'] = err.ice_name
     return retval
 
-def update_error(obj, error, prcname):
+def update_err(obj, err, prcname):
     obj['SUCCESS'] = False
-    obj['ERROR'] = get_error_dict(error)
+    obj['ERROR'] = get_err_dict(err)
     obj['ERROR']['PROCESS'] = prcname
 
 getPassword = lambda uname: USERS[uname]['PASSWORD'] if uname in USERS else None
@@ -79,20 +80,20 @@ getPassword = lambda uname: USERS[uname]['PASSWORD'] if uname in USERS else None
 def connect(**kwargs):
     if 'conn' not in kwargs or kwargs['conn'] is None:
         kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
-    error = None
+    err = None
     for i in xrange(3): # try to connect 3 times
         try:
             kwargs['dataset'] = tools.get_dataset(kwargs['conn'], os.path.dirname(kwargs['path']))
-        except Exception, err:
+        except Exception, e:
             close_session(**kwargs)
             kwargs['conn'] = tools.connect_to_omero(kwargs['uname'], kwargs['passwd'])
-            error = err
+            err = e
             continue
-        error = None
+        err = None
         break
     else:
-        if error is not None:
-            raise error
+        if err is not None:
+            raise err
     return kwargs
 
 def init_chromatic_shift(**kwargs):
@@ -178,7 +179,7 @@ def unit_process(prcname, func, **kwargs):
     try:
         kwargs = func(**kwargs)
     except Exception, err:
-        update_error(kwargs['retval'], err, prcname)
+        update_err(kwargs['retval'], err, prcname)
         raise
     return kwargs
 
@@ -224,7 +225,7 @@ def import_file(path, uname=None, passwd=None, conn=None):
             succeed
             ], kwargs)
     except Exception, err:
-        print >> sys.stderr, err
+        error(err)
 
     if conn is not None:
         close_session(**kwargs)
@@ -235,10 +236,10 @@ def import_to_omero(path, pattern=None, ignores=None):
 
     result = {}
     connects = {}
-    print >> sys.stderr, '[LOG] path: %s' % path
+    info('path: %s' % path)
     for dpath, fname in search_files(path, pattern, ignore_pattern):
         fullpath = os.path.join(dpath, fname)
-        print >> sys.stderr, '[LOG] checking for "%s"' % fullpath
+        info('checking for "%s"' % fullpath)
         if not os.access(fullpath, os.R_OK):
             continue
         owner = get_owner(fullpath)
@@ -278,7 +279,7 @@ def main():
         for path in paths:
             result.update(import_to_omero(path, pattern, ignores))
     except Exception, err:
-        print >> sys.stderr, err
+        error(err)
 
     print '}'
     #print json.dumps(result)
